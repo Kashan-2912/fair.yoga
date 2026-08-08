@@ -143,6 +143,27 @@ phrase across **spec, plan, source, tests, PR body, and the GitHub issue** befor
 fixed. Live reference docs count — `docs/technical-architecture.md` is listed in CLAUDE.md
 and went stale on #39 because a field it documented was deleted.
 
+**That instruction is not enough on its own, and #41 proved it.** The rule was followed and
+the defect still shipped through two gates, because knowing the goal is not the same as
+having a way to check you reached it. Two procedures, both mechanical:
+
+- **A finding that names N locations gets N verdicts, not one.** On #41 a finding named spec
+  `:243`, plan `:498`, and a commit message. The fix wave corrected the spec and the test and
+  silently skipped the plan; the re-review verdicted the whole finding ADDRESSED on the
+  strength of the locations it happened to open. "Is F1 fixed?" is unanswerable when F1 lives
+  in three files. Enumerate the locations in the dispatch, and require the verdict to name
+  each one.
+- **Derive the post-fix sweep from the wave's diff, not from a keyword.** The re-review was
+  told to `grep` for one finding's phrase ("three mutations"). It did, it passed, and a
+  *different* finding's twin sat untouched three hundred lines away. Instead: list the files
+  the wave changed, list the files it was *supposed* to change, and reconcile the two. A
+  keyword sweep scoped to one finding cannot see another finding's twin — and a wave that
+  fixes four of five things will report success either way.
+
+The corollary is worth stating because it is counter-intuitive: **a fix wave's own report is
+not evidence.** It said it had corrected "the spec, the plan, and the commit message." It had
+not. Reconcile against the diff.
+
 ## 5. Build with subagents; review at both levels
 
 Use `superpowers:subagent-driven-development`. Per task: brief → implementer → review (spec
