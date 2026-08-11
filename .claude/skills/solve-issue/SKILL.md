@@ -291,6 +291,20 @@ restatement of the issue), add anything spun out, re-check the open count agains
   migration. `prisma db execute` swallows `RAISE NOTICE` but does surface `RAISE EXCEPTION`;
   use `psql` inside the `fairyoga-db-1` container when you need to see a success notice.
 - **Never `git add -A` or `git add .`** — stage exact paths.
+- **Never write "does not close #N" in a PR body or commit message.** GitHub's auto-close
+  parser matches `close #N` and does not understand the negation in front of it. #191's
+  scope section said "Does not close #113 or #122" and the merge closed #113 — a line that
+  existed to be honest about scope did the exact opposite. (#122 survived only because the
+  keyword must sit immediately before each reference, so the bare `or #122` did not match.)
+  The same trap applies to `fixes`, `fixed`, `resolves`, `resolved`, `closed`. Write
+  "**#N is unaffected**" or "**leaves #N open**". Symptom to watch for: the open count after
+  a merge is one lower than `closed − filed` predicts. Reopen with an explanation rather
+  than silently — a closed issue nobody decided to close is worse than an open one.
+- **Post `gh issue`/`gh pr` prose from a `--body-file`, never `--body "…"`.** Backticks
+  inside a double-quoted shell string still reach zsh as command substitution even escaped,
+  and it fails *silently*: on this round a `gh issue comment` succeeded, returned a URL, and
+  published a sentence reading "**Measured:** (added by #191) and both wrap…" with two file
+  paths eaten. Write the markdown to a file in the scratchpad and pass the path.
 - Recipes for driving the running app (auth without email, Playwright, seed data) live in the
   `verify` skill.
 
@@ -298,8 +312,21 @@ restatement of the issue), add anything spun out, re-check the open count agains
 
 Record what was measured and where the errors were, including your own. State which inherited
 claims were checked and which held; show the arithmetic behind every number; name what the PR
-does *not* do; and say which suites ran — `integration` is never run in full, so name the
-files that ran by path.
+does *not* do; and say which suites ran, naming by path the `integration` files this branch
+touched.
+
+Two mechanical traps in that paragraph, both of which have fired:
+
+- **The "does not do" section is where `does not close #N` gets written, and that phrasing
+  closes the issue** — see the hazard list above. Write "#N is unaffected". This is the one
+  place the skill's own instruction leads straight into the trap, which is why the warning is
+  repeated here rather than only above.
+- **"`integration` is never run in full" is no longer true, and repeating it understates the
+  evidence.** `npm run verify` runs all three vitest projects, so a green `verify` *is* the
+  whole integration suite. Say so, with the arithmetic that proves it — on #191 that was
+  `105 = 46 unit + 32 components + 27 integration`, which turns "every integration file ran"
+  from a reassurance into a checkable claim. Still name the touched files by path, so a
+  reviewer knows where to look.
 
 That honesty is load-bearing rather than decorative: on #39 a wrong assertion count would have
 shipped in the PR body if the whole-branch review had not measured it independently.
