@@ -6,12 +6,7 @@ A free, open-source toolkit for independent yoga teachers. Not a marketplace —
 
 - **Framework:** Next.js 14+ (App Router) — single process for frontend, SSR, and API
 - **Language:** TypeScript with `strict: true` — no `any`, no implicit types, non-negotiable
-- **Database:** PostgreSQL with Prisma ORM
 - **Auth:** Magic link (oslo/crypto) + passkeys (@simplewebauthn/server). No passwords, no SMS. Sessions stored in DB.
-- **Email:** Resend (transactional)
-- **Styling:** Tailwind CSS
-- **Testing:** Vitest (unit/integration) + Playwright (e2e)
-- **Real-time:** Server-Sent Events for notifications
 - **Deployment:** Single VPS, Docker (Next.js + PostgreSQL), Nginx, Let's Encrypt
 
 → Full details: `docs/technical-architecture.md`
@@ -81,8 +76,6 @@ Teacher sends message to all students of a specific class (or all their students
 
 ## Data Model
 
-16 entities across 6 domains: People (Account, Teacher, Student, StudentPrivacy, Invitation, TeacherBlock), Spaces (Room, TeacherRoom), Classes (ClassTemplate, Class, StudioClass), Bookings (Registration, WaitlistEntry), Payments (Payment), Communication (Notification, Announcement).
-
 Key design decisions:
 - `tier_at_booking` on Registration captures income tier at booking time — serves as income history, no separate tracking needed
 - `StudentPrivacy` is per-teacher — students control what each teacher can see, default is maximum privacy
@@ -108,23 +101,6 @@ Key design decisions:
 
 → Full IA reference: `docs/information-architecture.md`
 → Navigation and component patterns: `docs/design-brief.md`
-
-## Project Structure
-
-```
-src/
-├── app/
-│   ├── (public)/          # SSR pages: teacher booking page, login, verify
-│   ├── (teacher)/         # Auth required: schedule, students, inbox, settings, class/[id]
-│   ├── (student)/         # Auth required: bookings, settings
-│   └── api/               # Thin route handlers → delegate to services
-├── services/              # Pure business logic (pricing, class-lifecycle, waitlist, notifications, payments)
-├── lib/                   # Shared utilities (auth, db, email, types)
-└── components/            # React components (ui, schedule, class, students, layout)
-tests/
-├── e2e/                   # Playwright
-└── integration/           # API route tests
-```
 
 ## Design Philosophy
 
