@@ -369,7 +369,8 @@ build-only defect passes `verify` and fails CI.
   file this branch touches.
 - What the PR does **not** do: it does not close the queue when a class starts,
   does not touch the notification layer, and adds no migration. Write
-  "**#216 is unaffected**" — never "does not close #216", which closes it.
+  "**#216 is unaffected**". Never write the negated form with the keyword next to the
+  number — GitHub reads it as a directive and the negation is invisible to the parser.
 - Which inherited claims you checked and which held. Two in #199 were false (the
   predicate and the bound); the third — that `/bookings` filters entry status and
   not class status — was true.

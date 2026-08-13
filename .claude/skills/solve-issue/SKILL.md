@@ -260,7 +260,17 @@ out, what acceptance looks like. Issues filed that way still make sense months l
 Rebase-merge, **never squash** — the commit-per-task history is the record. Then update
 `docs/backlog-roadmap.md`: mark the issue done with what was actually learned (not a
 restatement of the issue), add anything spun out, re-check the open count against
-`gh issue list`, and leave the file untracked.
+`gh issue list --state open --limit 200` (it silently pages at 30), and leave the file
+untracked.
+
+**Then re-derive the triage lists, don't read them.** Run `gh issue view <n> --json state`
+over every issue number the roadmap's "Live bugs", "Someone is currently worse off" and
+"Blocked on a decision" lists name — one call each, and the lists are short. Two kinds of rot
+show up only this way: an issue closed by an accidental keyword (see the hazard list — it has
+happened twice to the same issue, the second time via the commit documenting the first), and
+an issue legitimately closed that the list still carries as open work. The open *count* will
+not reveal either, because a wrong closure gets absorbed into the next snapshot's baseline and
+the arithmetic then reconciles against the corruption. #199's round recovered one of each.
 
 ## Project hazards that have actually bitten
 
@@ -292,14 +302,34 @@ restatement of the issue), add anything spun out, re-check the open count agains
   use `psql` inside the `fairyoga-db-1` container when you need to see a success notice.
 - **Never `git add -A` or `git add .`** — stage exact paths.
 - **Never write "does not close #N" in a PR body or commit message.** GitHub's auto-close
-  parser matches `close #N` and does not understand the negation in front of it. #191's
-  scope section said "Does not close #113 or #122" and the merge closed #113 — a line that
-  existed to be honest about scope did the exact opposite. (#122 survived only because the
-  keyword must sit immediately before each reference, so the bare `or #122` did not match.)
-  The same trap applies to `fixes`, `fixed`, `resolves`, `resolved`, `closed`. Write
-  "**#N is unaffected**" or "**leaves #N open**". Symptom to watch for: the open count after
-  a merge is one lower than `closed − filed` predicts. Reopen with an explanation rather
-  than silently — a closed issue nobody decided to close is worse than an open one.
+  parser matches `close #N` and does not understand the negation in front of it. PR #191's
+  scope section said *"Does not \[keyword] #113 or #122"* — with the real word and the real
+  number adjacent — and the merge closed issue 113. A line that existed to be honest about
+  scope did the exact opposite. (Issue 122 survived only because the keyword must sit
+  immediately before each reference, so the bare `or #122` did not match.) The same trap
+  applies to `fixes`, `fixed`, `resolves`, `resolved`, `closed`. Write
+  "**#N is unaffected**" or "**leaves #N open**".
+
+  **This rule governs the claim; it does not govern the citation, and that gap has already
+  fired.** Five minutes after issue 113 was reopened with an explanation, commit `ee2ecff` —
+  *"docs: two hazards that fired silently, and the instruction that caused one"*, written to
+  record this very trap — **closed it again**, because its body quoted the offending line
+  verbatim to explain it and the parser matched the keyword inside the quotation. It then sat
+  closed with `stateReason: COMPLETED` for two days, looking deliberate.
+
+  So: **anything that reproduces the phrase must break the token, not quote it.** Separate
+  the keyword from the number (`\[keyword] #113`), or drop the `#` and write the number as
+  prose ("closed issue 113"). This bullet does both, deliberately — read its own wording as
+  the worked example.
+
+  Symptom to watch for: the open count after a merge is one lower than `closed − filed`
+  predicts. **That signal is necessary but not sufficient, and it failed here** — 113's
+  wrong closure was already baked into the next snapshot's baseline, so the arithmetic
+  reconciled perfectly while being quietly wrong. Arithmetic on a corrupted baseline
+  validates the corruption. What actually recovered it was re-deriving the state of every
+  issue named in the roadmap's triage lists with `gh issue view` — one call per number, one
+  round in arrears at worst. Do that every closing round (§8). Reopen with an explanation
+  rather than silently; a closed issue nobody decided to close is worse than an open one.
 - **Post `gh issue`/`gh pr` prose from a `--body-file`, never `--body "…"`.** Backticks
   inside a double-quoted shell string still reach zsh as command substitution even escaped,
   and it fails *silently*: on this round a `gh issue comment` succeeded, returned a URL, and
@@ -320,7 +350,10 @@ Two mechanical traps in that paragraph, both of which have fired:
 - **The "does not do" section is where `does not close #N` gets written, and that phrasing
   closes the issue** — see the hazard list above. Write "#N is unaffected". This is the one
   place the skill's own instruction leads straight into the trap, which is why the warning is
-  repeated here rather than only above.
+  repeated here rather than only above. **And when you explain the trap — in a commit
+  message, a review comment, an update to this file — break the token instead of quoting it,
+  or the explanation fires the trap.** That has happened once already, five minutes after a
+  reopen, in the commit written to document it.
 - **"`integration` is never run in full" is no longer true, and repeating it understates the
   evidence.** `npm run verify` runs all three vitest projects, so a green `verify` *is* the
   whole integration suite. Say so, with the arithmetic that proves it — on #191 that was

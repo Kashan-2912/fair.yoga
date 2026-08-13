@@ -520,7 +520,7 @@ The body must record, per spec §8 and the handover's §8:
 - All three mutations with their exact recorded failure text.
 - `tests/integration/waitlist-display.test.ts` named by path as the integration file this branch touches, and the fact that a green `verify` runs the whole integration project rather than a named subset.
 - Which inherited claims were checked: two of #199's were false (the proposed predicate, and "the population is bounded"), one held (`/bookings` filters entry status and not class status).
-- What the PR does not do: no queue closing when a class starts, no notification-layer change, no migration. Write "**#216 is unaffected**" — **never** "does not close #216", because GitHub's parser matches `close #N` and ignores the negation in front of it. A previous PR's scope section closed #113 exactly this way.
+- What the PR does not do: no queue closing when a class starts, no notification-layer change, no migration. Write "**#216 is unaffected**". **Never write the negated form with the keyword adjacent to the number** — GitHub's parser matches `close #N` and the negation in front of it is invisible to it. A previous PR's scope section retired issue 113 exactly that way, and the commit written to document that then did it a second time by quoting the phrase.
 
 `Closes #199` is correct and deliberate in this body — that is the one closing keyword that belongs here.
 
