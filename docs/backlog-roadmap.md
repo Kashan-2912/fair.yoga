@@ -1,11 +1,15 @@
 # Open-issue roadmap & bundling
 
-**Snapshot:** 2026-08-15 (revised after #83/#209/#180 merged, PR #230) · **67
-open issues**, re-counted with `gh issue list --state open --limit 200` = 67.
-Reconciles: 66 + 1 (#228, filed 13:25Z on the 14th) − 1 (#113, closed 17:18Z
-by PR #227) + 1 (#229, filed 22:59Z on the 14th) − 3 (#83, #209, #180, all by
-PR #230) + 3 (#231, #232, #233, from PR #230's review wave) = 67. Measured,
-not derived.
+**Snapshot:** 2026-08-15 (revised after #216/#182 merged, PR #235) · **69
+open issues**, re-counted with `gh issue list --state open --limit 200` = 69.
+Reconciles: 67 − 2 (#216, #182, both by PR #235) + 4 (#234 filed mid-round,
+then #236, #237, #238 from PR #235's two review waves) = 69. Measured, not
+derived — and the previous line's arithmetic is kept below rather than
+overwritten, for the reason the paragraph after it gives.
+
+The 67 it starts from: 66 + 1 (#228, filed 13:25Z on the 14th) − 1 (#113,
+closed 17:18Z by PR #227) + 1 (#229, filed 22:59Z on the 14th) − 3 (#83, #209,
+#180, all by PR #230) + 3 (#231, #232, #233, from PR #230's review wave) = 67.
 
 **Two rounds are folded into that line, and the first draft of this snapshot
 lost one of them.** It read "66 − 3 + 4 = 67", which is arithmetically correct
@@ -100,9 +104,9 @@ of the fix — the one case the sweep structurally cannot reach — filed as a
 decision because closing it means deciding what the cancel deadline promises.
 
 The previous snapshot's note stands: **#196 was auto-closed by an earlier
-merge and reopened** — see the closing-keyword hazard below. This round's PR body
-said "**#216 is unaffected**" for exactly that reason, and #216 is still open,
-which is the check working.
+merge and reopened** — see the closing-keyword hazard below. That round's PR body
+said "**#216 is unaffected**" for exactly that reason, and #216 stayed open,
+which was the check working. It is closed now — by PR #235, which owned it.
 An explicit high `--limit` is required because `gh issue list` silently pages at
 30. The move was 40 → minus #146/#148 (PR #163) → plus #162/#164 → minus #162
 (PR #165) → plus #166/#167/#168 → minus #166 (PR #169) → plus
@@ -125,7 +129,10 @@ snapshot) →
 plus #228 → **minus #113 (PR #227, closed by hand six minutes after the
 merge)** → plus #229 (filed mid-round, before PR #230, because
 `docs/lock-order.md` had to cite it) →
-**minus #83/#209/#180 (PR #230) → plus #231, #232, #233**.
+**minus #83/#209/#180 (PR #230) → plus #231, #232, #233**. →
+**minus #216/#182 (PR #235) → plus #234, #236, #237, #238** — two in,
+four out, and the only round so far whose spin-outs came from reviewing its own
+fixes rather than its own implementation.
 
 (#227 and #230 are PRs, not issues, and do not appear on either side of this
 line except as the agent of a closure. An earlier draft of this entry listed
@@ -2017,6 +2024,74 @@ schema-plus-middleware job — so it settled the controls instead.
   greps `cleanup` and picks the wrong one of two", which a signpost beside the
   function fixes and a backlog entry does not.
 
+## This round's spin-outs (#216/#182, PR #235) — four, and the round that reviewed its own fixes
+
+~~**#216**~~ ~~**#182**~~ **both CLOSED 2026-08-15** (PR #235, rebase-merged, 28
+commits). Two in, four out.
+
+Three review rounds, and the shape is the point: round one reviewed the
+implementation, round two fixed it, **round three reviewed round two** — because
+round two was self-reviewed, and the same reasoning that proposes a fix is not
+positioned to judge it. Round three found a fix that inverted itself, a claim
+false in four places, and an Article 17 failure that had been *described in a
+comment as retryable* when it provably was not.
+
+**The lesson worth keeping is not "review twice".** It is that a fix wave earns
+the same scrutiny as the code it fixes, and mutation testing does not supply it:
+mutation proves a test *can* fail, never that it asserts the right thing. Three
+guards this branch added passed 763, 1172 and 205 tests respectively when
+deleted; one test went **vacuously green rather than flaking**, which keeps CI
+quiet while the guard is gone.
+
+**#234 — attendance cannot be edited after a class completes.** `showCheckin`
+goes false within about a minute of the scheduled end, so a teacher's only window
+to record attendance is while they are teaching. The write path already tolerates
+a post-completion correction — that is what the PUT's deliberate `completed`
+allowance protects — so this is UI work with one open question: whether the
+editing window ever closes.
+
+**#236 — a late cancel frees the seat to the open market, but the waitlist is
+frozen out of it.** A late cancel is by definition after the cancel deadline, so
+`handleSpotFreed` always short-circuits on `frozen`: the seat goes to the public
+booking page and the people queuing for it are the only ones who cannot have it.
+Freezing *auto-promotion* is right — it bills without consent. Freezing the
+*opt-in broadcast* is not, and the two are frozen by one condition only because
+they read the same window function. A boundary change, not new machinery.
+
+**#237 — multi-row `Class` locking is a convention tracked in prose.** Five sites
+hand-roll the same ordered `FOR UPDATE OF c`, and this document's sibling
+(`docs/lock-order.md`) maintains a five-row table tracking them — a
+hand-maintained census, which has already been corrected about *this exact list*
+three times. Filed with a debt attached: replacing the erasure's lock loop with a
+single statement made the AB-BA cycle unconstructible, so three deadlock tests no
+longer detect a missing `ORDER BY`. Verified, written into the tests, and repaid
+by testing the shared primitive once rather than per pairing.
+
+**#238 — nothing ever reaps a closed, unfulfilled `WaitlistEntry`**, and that
+single fact is upstream of almost everything above. Classes are never deleted;
+`onDelete: Cascade` from `Student` never fires because erasure anonymises rather
+than deletes. So the population grows for the life of each account, which is what
+made the erasure's lock set unbounded, `reconcileWaitlists`' join load-bearing
+rather than belt-and-braces, and the Article 15 export a record of years of
+non-events. Also a storage-limitation problem in its own right — the retention
+period is a decision, and "forever" is what ships today.
+
+### The finding this round is actually about
+
+**A guard added in the same commit as the guard it accompanies inherits none of
+its coverage.** Every mutation survivor in round two was a second clause, a
+second status in a list, a log-level branch, or a lock — added alongside
+something that *was* tested, and assumed to be covered by proximity. The branch
+mutation-tested the guards it wrote tests *for*, and not the guards it wrote
+*beside* them.
+
+Its sibling: **a client-side pre-check of server state can only ever subtract.**
+`AttendanceList` took a `classIsOpen` prop to avoid offering a tap the server
+would refuse. The page is a server component with no `revalidate`, so the prop
+froze at render and the control never unlocked once the class started — a
+*silent* refusal replacing a visible one, on the only screen in the app designed
+to be held in one hand at a venue.
+
 ## This round's spin-outs (#83/#209/#180, PR #230) — three, and a defect class this branch kept producing
 
 ~~**#83**~~ ~~**#209**~~ ~~**#180**~~ **all CLOSED 2026-08-15** (PR #230,
@@ -2658,10 +2733,12 @@ same shape — a scan or a table that is fine until it is not — and all three
 should be **measured before anything is added**, which #222 is the argument for:
 it justified an index at length and dropped it three commits later when the query
 it served went away.
-**Blocked on a decision:** #216 (`removed` or `expired` for a queue closed by its
-class starting — deliberately left open, because it is the kind of choice that is
-cheap now and expensive after it ships, and the Article 15 export publishes the
-answer); #213 and #214 (both filed as decisions by #196's branch 2); **#219**
+**Blocked on a decision:** ~~#216~~ **answered and shipped** — `expired`, not
+`removed`, on the argument the entry predicted: `exportStudentData` publishes the
+status verbatim without the class's, so `removed` would tell an Article 15
+subject they withdrew from a queue they were closed out of. #238 is the sequel
+the same reasoning produces — a status you publish forever is data you should not
+hold forever. #213 and #214 (both filed as decisions by #196's branch 2); **#219**
 (make `readSeatCount`'s lock precondition structural — a `ClassLock` token, a
 `FOR UPDATE` in its own read, or leave it; the token's escape hatch is sized by
 #104 and empties when #104 lands); **#226** (a broadcast dropped in the final
