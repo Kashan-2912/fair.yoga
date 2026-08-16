@@ -18,7 +18,7 @@ grep -n "#<N>" docs/backlog-roadmap.md             # its bundle, and why it is s
 git log --oneline -10                              # what landed recently
 ```
 
-`docs/backlog-roadmap.md` is untracked and local. It is the map: it records which bundle the
+`docs/backlog-roadmap.md` is tracked, and committed once per round. It is the map: it records which bundle the
 issue belongs to, what it is blocked on, what spun it out, and — in the entries for closed
 issues — what went wrong last time in that area. Read the surrounding bundle, not just the
 one line.
@@ -44,7 +44,7 @@ verify the issue's premise
   → whole-branch review → one fix wave → one scoped re-review
   → push + PR → [GATE] /pr-review-toolkit:review-pr <N>
   → aggregate → fold, file, or let go (§7) → [GATE] rebase-merge
-  → update docs/backlog-roadmap.md (never commit it)
+  → update docs/backlog-roadmap.md → commit it, on its own
 ```
 
 **Never skip a gate.** The user's answers have changed the design at every one of them —
@@ -317,8 +317,12 @@ out, what acceptance looks like. Issues filed that way still make sense months l
 Rebase-merge, **never squash** — the commit-per-task history is the record. Then update
 `docs/backlog-roadmap.md`: mark the issue done with what was actually learned (not a
 restatement of the issue), add anything spun out, re-check the open count against
-`gh issue list --state open --limit 200` (it silently pages at 30), and leave the file
-untracked.
+`gh issue list --state open --limit 200` (it silently pages at 30).
+
+**Commit it on its own**, `docs: roadmap after #<N> (PR #<M>) — <in> in, <out> out`, staging
+that one path. On its own because it is the round's last act and belongs to no task; the file
+was tracked in the first place by being swept into `07d53b8`, a bug-fix commit about the
+check-in list, which is what "stage exact paths" is for.
 
 **Then re-derive the triage lists, don't read them.** Run `gh issue view <n> --json state`
 over every issue number the roadmap's "Live bugs", "Someone is currently worse off" and
