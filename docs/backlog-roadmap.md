@@ -1,7 +1,24 @@
 # Open-issue roadmap & bundling
 
-**Snapshot:** 2026-08-15 (revised after #216/#182 merged, PR #235) · **69
-open issues**, re-counted with `gh issue list --state open --limit 200` = 69.
+**Snapshot:** 2026-08-16 (revised after #240 merged, PR #246) · **72 open
+issues**, re-counted with `gh issue list --state open --limit 200` = 72.
+Reconciles: 69 − 1 (#237, PR #239) + 6 (#240–#245, all from PR #239's review)
+= 74, then − 2 (#240 by PR #246; #243 closed unbuilt, NOT_PLANNED) = 72.
+
+**Two closed, none filed — and that is the point of the round, not a
+by-product.** The previous round closed one issue and filed six, all in two
+files, from a branch of 6 `refactor` + 4 `test` + 4 `docs` + 1 `feat` and zero
+`fix`; across the forty commits before it, `docs:` was the largest single
+category. That is a review loop sustaining itself: each pass finds true things
+about the previous pass's comments and coverage, which become issues, which
+justify another pass. #240 was worth doing on its merits; #243 was declined
+after its premise was verified, and the verification is the deliverable. The
+specialised PR-review gate was also skipped by decision — seven review passes
+had already run on a three-source-file diff, and the last two produced four
+cosmetic nits between them. Reviewing has a ratio too.
+
+**Previous snapshot:** 2026-08-15 (after #216/#182, PR #235) · **69 open
+issues**, re-counted with `gh issue list --state open --limit 200` = 69.
 Reconciles: 67 − 2 (#216, #182, both by PR #235) + 4 (#234 filed mid-round,
 then #236, #237, #238 from PR #235's two review waves) = 69. Measured, not
 derived — and the previous line's arithmetic is kept below rather than
@@ -2067,6 +2084,71 @@ single statement made the AB-BA cycle unconstructible, so three deadlock tests n
 longer detect a missing `ORDER BY`. Verified, written into the tests, and repaid
 by testing the shared primitive once rather than per pairing.
 
+**#240 — DONE (PR #246, 2026-08-16).** `deleteStudentAccount`'s transaction
+budget is a flat `{ timeout: 20_000 }`; the count that sized it is gone. What
+the issue did *not* contain was the useful part: `gdpr.ts` held both halves of a
+contradiction three hundred lines apart. One paragraph argued the count must be
+`waiting`-only because the lock statement's cost no longer scales with N; a
+later one, added by #237's review, said it does. The argument against the fix
+was also inverted — `min(5_000 + N·2_000, 20_000)` is monotone non-decreasing
+and capped, so an all-status count could only ever grant *more* budget. Verified
+at `7298311`'s parent `f1caede`, which carried the all-status count **and** the
+loop simultaneously: the count revert strictly reduced the budget, so only the
+loop removal can have fixed anything. `7298311` changed both and credited the
+wrong one.
+
+**Three lessons, none of them about erasure.**
+
+1. **A keyword census cannot find a claim that changes verb.** The sweep was
+   specified at six artifacts and finished at ten. "sized" → "sizes" →
+   "`Math.min` ceiling" → "is exactly this caller", plus one where the phrase
+   wrapped across a line break. Each of the four extras was found by a
+   *different* agent reading for meaning. The count is not the lesson; the
+   mutation of the surface form is.
+2. **The ninth artifact was text this branch wrote.** The plan's own replacement
+   corrected the sizing clause of a sentence and left its loop clause standing —
+   inside the commit whose purpose was correcting stale claims about that
+   function. Twin-fixing is not a rule you can follow by intending to.
+3. **Three implementers independently flagged the same plan defect** wearing
+   three disguises: keyword-*absence* checks (`grep` must return nothing)
+   specified for a change whose deliverable is prose that quotes the removed
+   keyword. The right check was always "no surviving hit makes a false
+   *current-state* claim" — a reading task, not a grep.
+
+Also: the new test could initially pass vacuously, and the whole-branch review
+caught it. Its assertions are now causal *and* elapsed (`> 5_000ms`, the old
+floor), mutation-proved twice by two agents at 2780ms and 2967ms. And
+`docs/lock-order.md:910` lost half of an argument **#229** rests on — both
+erasures now carry flat budgets, so "the tuned budget would absorb a re-ordering
+and the flat one would not" no longer applies. Whoever takes #229 should read
+that paragraph first.
+
+**#243 — CLOSED UNBUILT (2026-08-16, NOT_PLANNED).** Verifying its premise is
+what closed it. Its headline claim — that narrowing the pre-lock's fragment
+would be silent, surfacing only as an intermittent `40P01` — is false:
+`gdpr.test.ts`'s five-status `it.each` was written for exactly that mutation and
+four of five cases fail deterministically. So the fix was
+structural-vs-test-enforced, not detected-vs-silent. It also costs more than the
+issue says: scoping the delete to the locked ids lets a waitlist join committing
+mid-erasure *survive* the erasure, so making it safe needs a postcondition
+guard, a new error class, a branch in `erasureFailure` (`isTransientDbError`
+cannot see a service-level error, so the caller would be told "pressing Delete
+again will not fix it" about the one failure it does fix), and two tests — one
+racing HTTP against DB interleaving. All to close a race requiring a student to
+join a waitlist during their own erasure, which cannot be closed anyway under
+READ COMMITTED, only narrowed. Visible, not worsened. Full analysis in §1.4 of
+`docs/superpowers/specs/2026-08-16-erasure-budget-design.md` and on the issue.
+
+**#244 — updated, not duplicated.** Eight stale present-tense "lock loop"
+references enumerated onto it (three in `template-lock-order.test.ts`, two in
+`gdpr.test.ts`, one each in `db-locks.test.ts` and
+`tests/integration/account-api.test.ts`, plus `docs/lock-order.md:701-708`,
+which still carries the inverted argument with no pointer to its rebuttal).
+They carry loop claims only, with no budget claim attached, so PR #246 had no
+reason to open them. Enumerated so a fifth round does not rediscover them. The
+count rose from five to eight *while the list was being written*, which is the
+branch's own lesson happening again.
+
 **#238 — nothing ever reaps a closed, unfulfilled `WaitlistEntry`**, and that
 single fact is upstream of almost everything above. Classes are never deleted;
 `onDelete: Cascade` from `Student` never fires because erasure anonymises rather
@@ -2708,23 +2790,39 @@ PR #93 ──closed──> #86            (archive rule)   └─ spun out ─�
 **Standalone quick wins, any time:** #189 (one test, no timers, and its fixtures
 already exist in `notifications-stream.test.ts`). (#59, #58, #81+#85, #101, #115
 all done.)
-**Live bugs, not just cleanup:** #103's second half (500 on room delete), #113
-(an archive that loses the lock race reports "Internal server error" — **reopened
-2026-08-13**, see the double-accident note at the top), #193 (a committed toggle
-reports "Network error", then answers the retry with silence), #194 (editing a
-studio template's day leaves its old classes standing). **Every number in this
-list re-derived against `gh issue view` on 2026-08-14** — once more after PR #222
-merged. That is how #113 was recovered and how it is now known to have survived
-two subsequent merges. #101, #115, #119, #120, #112, #199, #212 and **#220** were
-on this list and are legitimately closed.
-**Someone is currently worse off:** #113 again, now that it is back — an archive
-that loses its lock race shows the teacher a developer string. **#220 held this
-slot and closed 2026-08-14** (PR #222): under contention every student queued on
-a class was silently not told a seat opened, the seat went unsold, and the
-pricing engine then billed everyone who did attend *more*. #226 is the residue —
-the same loss, confined to the final minute before the cancel deadline — and is
-**not** on this list, because it needs a product decision before it is even
-agreed to be a defect. #199 and #212 held this slot and closed 2026-08-13.
+**Live bugs, not just cleanup:** #103's second half (500 on room delete), #193
+(a committed toggle reports "Network error", then answers the retry with
+silence), #194 (editing a studio template's day leaves its old classes
+standing). **Every number in this list re-derived against `gh issue view` on
+2026-08-16**, after PR #246 merged. #101, #115, #119, #120, #112, #199, #212,
+**#220** and now **#113** were on this list and are legitimately closed.
+
+**#113 came off this list, and the way it came off is the second rot type §8
+warns about.** The re-derivation found it CLOSED/COMPLETED — for the third
+time. The first two closures were accidents of GitHub's auto-close parser and
+had to be undone. **This one is legitimate:** PR #227 ("Name the loser:
+template lock-race outcomes answer 503 busy in 2s") merged 2026-08-14T17:12Z
+and is exactly #113's fix; the issue was closed by hand at 17:18Z, six minutes
+later, with no commit attached. The snapshot arithmetic above has counted it as
+closed since then. **What was stale was this list**, which says it was
+re-derived on 2026-08-14 — and was, several hours before the closure. So the
+count was right and the triage was wrong, which is the failure the open-count
+check structurally cannot see. Verify by `gh issue view`, every closing round,
+even when the arithmetic reconciles.
+
+**Someone is currently worse off:** *empty.* #113 held the last slot and closed
+2026-08-14 (PR #227): an archive that lost its lock race showed the teacher a
+developer string, and now names the loser with a 503 in 2s. **#220 held it
+before that** and closed 2026-08-14 (PR #222): under contention every student
+queued on a class was silently not told a seat opened, the seat went unsold,
+and the pricing engine then billed everyone who did attend *more*. #199 and
+#212 held it and closed 2026-08-13. #226 is the residue of #220 — the same
+loss, confined to the final minute before the cancel deadline — and is **not**
+on this list, because it needs a product decision before it is even agreed to
+be a defect. An empty list is worth stating plainly rather than deleting the
+heading: it is the first time it has been empty, and the next entry should have
+to be argued onto it.
+
 **Growth costs, nothing broken yet:** #223 (`Notification` has no retention
 policy and only grows, against a fixed 2 GB ceiling), #224 (`WaitlistEntry.status`
 and `Class.status` unindexed, scanned every sixty seconds by the reconciliation
