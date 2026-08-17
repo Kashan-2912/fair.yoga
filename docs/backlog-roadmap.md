@@ -1,7 +1,14 @@
 # Open-issue roadmap & bundling
 
-**Snapshot:** 2026-08-16 (revised after #240 merged, PR #246) · **72 open
-issues**, re-counted with `gh issue list --state open --limit 200` = 72.
+**Snapshot:** 2026-08-17 (after #238 merged, PR #248) · **72 open issues**,
+re-counted with `gh issue list --state open --limit 200` = 72. Reconciles:
+72 + 1 (#247, filed mid-round by this branch's own review) − 1 (#238, PR #248)
+= 72. **The number is unchanged and the set is not** — a round that closes one
+and files one holds the count still while moving the work, which is exactly the
+case a delta-only line would report as "nothing happened".
+
+**Previous snapshot:** 2026-08-16 (revised after #240 merged, PR #246) · **72
+open issues**, re-counted with `gh issue list --state open --limit 200` = 72.
 Reconciles: 69 − 1 (#237, PR #239) + 6 (#240–#245, all from PR #239's review)
 = 74, then − 2 (#240 by PR #246; #243 closed unbuilt, NOT_PLANNED) = 72.
 
@@ -2041,6 +2048,60 @@ schema-plus-middleware job — so it settled the controls instead.
   greps `cleanup` and picks the wrong one of two", which a signpost beside the
   function fixes and a backlog entry does not.
 
+## This round's spin-outs (#238, PR #248) — one, and a review finding that measurement withdrew
+
+~~**#238**~~ **CLOSED 2026-08-17** (PR #248, rebase-merged, 20 commits). One in,
+one out: **#247**, filed by this branch's own review, because the branch created
+the exposure it describes.
+
+**#247 is the shape worth naming: a change that makes an existing, inert defect
+harmful.** `updateClass` has never had a class-status guard, and the terminality
+trigger is `BEFORE UPDATE OF status` — its own SQL says other columns of a
+completed class are unaffected. So a teacher could always `PUT` any `date` onto
+their own finished class. Before this branch that was inert; nothing read
+`Class.date` on a terminal class for a consequential decision. `reapClosedWaitlistEntries`
+now does, and it **deletes**. The branch shipped the sweep and recorded the
+residual rather than widening its own scope — `waitlist-retention.ts`'s header
+and the spec's §2.4 both name #247 and say which half of the predicate is
+DB-enforced — but the honest reading is that this round *converted* a latent
+defect into a live data-loss path and filed the conversion.
+
+### The finding this round is actually about
+
+**A review finding that survives on plausibility is indistinguishable from one
+that survives on evidence, until someone measures it.** The whole-branch diff
+review raised five findings. Four were right. The fifth argued the capped-path
+`groupBy` should become a scalar `count`, on the reasoning that `cappedOut` is
+essentially only true on a first run against accumulated history — so the one
+path where the eligible set is large by definition was also the one
+materialising a row per class in the Node heap. That reasoning is correct and
+the conclusion was wrong:
+
+| capped-path shape | Time | Buffers |
+|---|---|---|
+| `groupBy` (kept) | **21.5 ms** | 926 |
+| `db.class.count({ waitlistEntries: { some: reapable } })` | 46.0 ms | 35,137 |
+| raw `COUNT(DISTINCT w."classId")` | 60.2 ms | 929 |
+
+Prisma compiles a nested relation filter under `some` into a semi-join whose
+inner side re-joins `Class` to itself, so it nested-loops every `Class` row —
+2.1× the time and 38× the buffer traffic to avoid a list of 5,000 short
+strings. The change was applied, measured, reverted, and the table now sits in
+the comment so the next reader does not re-derive the same wrong intuition.
+**The fix was cheaper to try than to argue about**, which is the generalisable
+part: the branch had a seeded 50,000-row test database already standing from
+Task 3, so the cost of checking was one `EXPLAIN` rather than a debate.
+
+Its sibling, from the same measurement: **the candidate read never scans, and
+the reason was not designed for it.** `orderBy: { classId: 'asc' }` exists so
+the isolation test's held class sorts first — a testability decision. It is also
+what lets Postgres walk `WaitlistEntry_classId_position_idx` in order and stop
+at 501 groups, turning the query the issue predicted would need an index into a
+2.5 ms early-terminating merge join. #238 asserted the work "carries a
+migration"; it carries none, and the plan rather than the timing is what says
+so. **#224 is unaffected** — its subject is the 60-second reconciliation sweep,
+a different query.
+
 ## This round's spin-outs (#216/#182, PR #235) — four, and the round that reviewed its own fixes
 
 ~~**#216**~~ ~~**#182**~~ **both CLOSED 2026-08-15** (PR #235, rebase-merged, 28
@@ -2149,16 +2210,27 @@ reason to open them. Enumerated so a fifth round does not rediscover them. The
 count rose from five to eight *while the list was being written*, which is the
 branch's own lesson happening again.
 
-**#238 — nothing ever reaped a closed, unfulfilled `WaitlistEntry`** (past
-tense as of the open branch that closes it; this entry keeps its triage
-treatment until the post-merge pass), and that
-single fact is upstream of almost everything above. Classes are never deleted;
-`onDelete: Cascade` from `Student` never fires because erasure anonymises rather
-than deletes. So the population grows for the life of each account, which is what
-made the erasure's lock set unbounded, `reconcileWaitlists`' join load-bearing
-rather than belt-and-braces, and the Article 15 export a record of years of
+~~**#238 — nothing ever reaped a closed, unfulfilled `WaitlistEntry`**~~
+**CLOSED 2026-08-17 (PR #248, rebase-merged, 20 commits)** — see its own
+spin-out section below. The triage reasoning is kept as written, because two
+of its four clauses turned out to be overstated and the correction is only
+legible beside the original: classes are never deleted; `onDelete: Cascade`
+from `Student` never fires because erasure anonymises rather than deletes. So
+the population grows for the life of each account, which is what made the
+erasure's lock set unbounded, `reconcileWaitlists`' join load-bearing rather
+than belt-and-braces, and the Article 15 export a record of years of
 non-events. Also a storage-limitation problem in its own right — the retention
-period is a decision, and the open branch decides it at 365 days.
+period is a decision, and #248 decides it at 365 days.
+
+**Two of those four clauses did not survive the branch that closed them.** The
+lock set is **shrunk, not bounded** — the erasure's pre-lock joins
+`WaitlistEntry` with no status predicate while the sweep reaps only UNFULFILLED
+entries, so a student promoted week after week still grows it for the life of
+the account. And `reconcileWaitlists`' join was already belt-and-braces before
+#238 was filed: #216's `closeQueueOnStart` did that one round earlier, and the
+comment quoted in support of the claim is explicitly past-tense. Left standing
+above rather than rewritten, because a triage entry is a record of what was
+believed at triage time.
 
 ### The finding this round is actually about
 
@@ -2769,6 +2841,12 @@ PR #93 ──closed──> #86            (archive rule)   └─ spun out ─�
        updateClassTemplate needed none, syncTemplateInstances needed a
        NARROWING to TransactionClientOnly. Spun out #231, #232, #233.
 
+#238 ──closed──> PR #248 └─ spun out ──> #247
+#238 ── the issue asserted a migration; the plan measured instead and shipped
+       none (2.5 ms, early-terminating merge join). #247 is not an adjacent
+       defect but one this branch ARMED: Class.date was always editable on a
+       terminal class, and inert until a sweep started deleting on it.
+
 #101 ‖ #115 ── same date-boundary family, two different pages ── do together
 #114 ── reopens the #72 → #78 → #79 → #82 line for the studio family
 
@@ -2833,6 +2911,16 @@ same shape — a scan or a table that is fine until it is not — and all three
 should be **measured before anything is added**, which #222 is the argument for:
 it justified an index at length and dropped it three commits later when the query
 it served went away.
+
+**#224 is NOT part-answered by PR #248's measurement, and the temptation to read
+it that way is why this says so.** That branch measured the *retention* sweep's
+candidate read over the same two columns and found 2.5 ms at 5,000 classes /
+50,000 entries — but only because its `orderBy` + `take` let the planner walk an
+existing index and stop early. #224's subject is the **reconciliation** sweep,
+which runs every sixty seconds and has no such limit. Different query, different
+plan, still unmeasured. #223 is the one PR #248 genuinely moved closer: it built
+the `daily-cleanup` job as the slot a second retention policy drops into, and
+`scheduler.ts` names #223 there.
 **Blocked on a decision:** ~~#216~~ **answered and shipped** — `expired`, not
 `removed`, on the argument the entry predicted: `exportStudentData` publishes the
 status verbatim without the class's, so `removed` would tell an Article 15
