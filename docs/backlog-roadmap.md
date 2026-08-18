@@ -1,6 +1,47 @@
 # Open-issue roadmap & bundling
 
-**Snapshot:** 2026-08-18 (after #249 merged, PR #256) · **78 open issues**,
+**Snapshot:** 2026-08-18 (after #73 merged, PR #261) · **79 open issues**,
+re-counted with `gh issue list --state open --limit 200` = 79. Reconciles:
+78 − 1 (#73, PR #261) + 2 (#259, #260, both spun out of this round's spec
+before any code was written) = 79.
+
+**Both of this round's filings came from writing the spec, not from reviewing
+the branch** — the inverse of the previous round, and stated as this round's
+shape rather than as a turn. #259 and #260 were filed at 13:13Z, hours before
+the first commit, because measuring the issue's premise surfaced two questions
+the fix deliberately does not answer: switching a private room to an
+already-shared one at the same address, and case-variant duplicates inherited
+from #196's byte-exact key. The five-agent review that followed filed **none**
+— it found 24 defects and every one was fixable in place.
+
+**The issue's own load-bearing claim was false, and that is the round's most
+useful output.** #73 argued the trap was *"API-only today. That makes it lower
+urgency."* The *flip* was API-only; the *lock* was the default outcome of the
+only room-creation flow in the app, at all three layers (pre-checked box,
+`?? true` in the route, `@default(true)` on the column). A teacher who left the
+box alone created a room they could never edit or delete. The correction is on
+the issue at close.
+
+**Three guarantees on this branch could be deleted with the suite still
+green** — the count that matters from the review, and the reason the round ran
+two review passes rather than one. `updateRoomSchema`'s `.strict()`, the
+duplicate search's argument order, and the column-default test were each
+removable at 0 cost to a green run. The generalisable one: **a single-key
+request body cannot distinguish "refused" from "ignored"**, because a strict
+schema stripping the only key leaves an empty update that answers the same 400.
+
+PR #261: 19 commits (7 `fix`, 6 `feat`, 2 `refactor`, 1 each `test`, `spec`,
+`plan`, `docs`) over 30 files, 27 of them in `src/`, `tests/` and `prisma/`.
+**Seven `fix` commits on a branch whose feature was six**, and **five** of the
+seven came from the branch's own two review rounds rather than from building
+(the other two are `f18521f`, the Task 4 feature fix, and `1e7f0b5`, which
+corrected drifted references in the spec and plan before any code was
+written). Counted from `git log`, because a first draft of this line said six
+and the count is the only reason the sentence is worth having. One more
+instance of the ratio the previous round recorded — now with the review
+finding a live TOCTOU race that the feature work itself had opened.
+
+**Previous snapshot:** 2026-08-18 (after #249 merged, PR #256) · **78 open issues**,
 re-counted with `gh issue list --state open --limit 200` = 78. Reconciles:
 75 − 1 (#249, PR #256) + 2 (#257, #258, from this round's review)
 + 2 (#254, #255) = 78.
@@ -449,7 +490,7 @@ force some of that order.
 | 3 | Unpinned-list cleanup & types | ~~#59~~ ~~#58~~ ~~#81+#85~~ ~~#101+#115~~ ~~#96~~ ~~#138~~ ~~#136~~ ~~#140~~ ~~#39~~ ~~#121~~ done, then #132 + #133 + #134 | one design call left (#133) |
 | 3b | Locking follow-ups | ~~#107~~ ✓, ~~#113~~ ✓ (PR #227), ~~#180~~ ✓ (PR #230); #116 + #117 + #126, #103, #104, #122, #229, #232 | one decision (#229) |
 | 4 | CI reliability & framework upkeep | ~~#185~~ ✓, ~~#41~~ ✓ (PR #188) — premise disproved; ~~#40~~ ✓ (PR #198) — nine components, not one, and its framework half closed unverified; then #127 (+#189) | none, but hard/uncertain |
-| 5 | Room lifecycle & admin (epic #60) | #73 + #76 + #52 | **product decision** |
+| 5 | Room lifecycle & admin (epic #60) | ~~#73~~ ✓ (PR #261) — rooms born private, sharing behind its own door; then #76 + #52 + **#259** + **#260** | **product decision** (the lock itself stands) |
 | 6 | Feature backlog | ~~#119 + #120~~ ✓; ~~#112~~ ✓; #47, then #46 / #48 / #49 / #51 | product priority |
 | 3c | **This week's spin-outs** — see below | ~~#146 + #148~~ ✓ done together (PR #163); #145 + #157 + **#258** (together — one column failing at three layers, see #249's round), #164, #162, #154, #142, #143, #147, #158, #161 | three are decisions (#147, #164, #258) |
 
@@ -616,9 +657,14 @@ left:
   create-side counterpart to `PlainUpdateForbiddenClassField`: 21 server-owned
   names, an exceptions map with a reason per entry, exact equality in **both**
   directions over all 34 exported schemas, and a compile-time pin against the
-  Prisma model key union. Three of the eight exceptions are labelled KNOWN GAP
-  with issue numbers (#73, #46, and `cancelledAt`) — latent defects now sit
-  beside the guard instead of in a spec nobody re-reads.
+  Prisma model key union. Some exceptions are labelled KNOWN GAP with issue
+  numbers — latent defects sit beside the guard instead of in a spec nobody
+  re-reads. **#73's entry is gone**: PR #261 removed `isPublic` from
+  `updateRoomSchema` entirely, which turned this existing guard into the
+  regression test for its own removal at zero cost, since it reads
+  `Object.keys(shape)`. The count that used to sit in this sentence was
+  removed with it — `type-pins.ts:56` argues against counts in prose for
+  exactly the reason this one went stale.
 
   **Three guards on this branch could not fail, and the review caught all three.**
   The register was blind to any schema wrapped in `.transform()`/`z.union`/
@@ -1458,8 +1504,10 @@ Small, independent follow-ups from earlier PR reviews. Cheap wins.
   class-creation wizard), **#148** (the same hole on `POST /api/studio-classes`,
   invisible because the key arrives through a `...rest` spread).
 
-  **Still blocked, unchanged:** `edit-room-form.tsx` on **#73**'s `isPublic`
-  decision, `profile-form.tsx` on **#46**'s `photoUrl`.
+  **One of the two is now unblocked:** `edit-room-form.tsx` was waiting on
+  **#73**'s `isPublic` decision, which PR #261 settled — the field left
+  `updateRoomSchema` altogether, so the form has nothing left to pin. Still
+  blocked: `profile-form.tsx` on **#46**'s `photoUrl`.
 
   **The lesson that generalises past forms.** The whole-branch review found what
   five task reviews could not, because each saw only its own diff: four forms'
@@ -1822,8 +1870,13 @@ into.** Hold a product-decision pass across the cluster before any code.
   removed a 500: an unknown `roomId` is now a 404 rather than a foreign-key
   violation.
 
-- **#73 — `PUT { isPublic: true }` is an irreversible one-way door** (locks the
-  creator out of edit *and* delete).
+- ~~**#73 — `PUT { isPublic: true }` is an irreversible one-way door**~~ **DONE
+  (PR #261).** The lock stands, deliberately — #52/#60's decision is untouched.
+  What changed is entry: rooms are born private, `updateRoomSchema` no longer
+  accepts the field (so `PUT` answers 400, rejected rather than ignored), and
+  sharing is `POST /api/rooms/[id]/publish`, guarded creator-first with a
+  duplicate check in front of it. The issue's "API-only, lower urgency" premise
+  was false — the lock was the default outcome of the only creation flow.
 - **#76 — room deletion blocked forever** by cancelled/completed classes (no
   status filter on the count). Three real options in the issue: keep + reword,
   filter by status, or archive via the unused `TeacherRoom.isArchived`.
@@ -2088,6 +2141,51 @@ schema-plus-middleware job — so it settled the controls instead.
   got a **docblock instead of an issue**, because the failure mode is "someone
   greps `cleanup` and picks the wrong one of two", which a signpost beside the
   function fixes and a backlog entry does not.
+
+## This round's spin-outs (#73, PR #261) — two, filed before any code was written
+
+~~**#73**~~ **CLOSED 2026-08-18** (PR #261, rebase-merged, 19 commits over 30
+files). One out, two in: **#259** and **#260**. Unlike the previous round's
+pair, neither came from reviewing the branch — both were filed at 13:13Z while
+measuring the issue's premise, hours before the first commit, and the spec
+names them as out of scope rather than discovering them later.
+
+**#259** — the sharing flow's exact-identity branch tells the teacher *"you can
+add it from Settings › Rooms › Add room"* and stops there. Automating the
+switch means repointing `Class.teacherRoomId` and `ClassTemplate.teacherRoomId`,
+which needs a decision about terminal-class history and runs straight into
+**#76**. Filed as a decision with options, not as work. **#260** — two rooms
+differing only by case or trailing whitespace are distinct to both
+`sameRoomIdentity` and `Room_public_identity_unique`, so the commons can hold
+`Prinsengracht 42` and `prinsengracht 42` as separate shared rooms. Pre-existing
+from #196's chosen key; PR #261 inherits it **deliberately**, because a
+predicate stricter than the index would refuse a share Postgres would have
+accepted and tell the teacher "already shared" about a room that is neither
+theirs nor the same — invisible and unrecoverable, where the looser direction
+merely reaches a 409 that already exists.
+
+**Where the two belong.** Both go in bundle 5 with **#76** and **#52**, and
+#259 in particular should not be attempted before #76: they are the same
+question asked from two directions — what happens to a room's history when the
+room a class points at is no longer the right one. #260 is the odd one, in that
+its mitigation already shipped: the neighbourhood search puts both variants in
+front of a human, which is the only correct answer available while the index
+stays byte-exact. Fixing it properly means changing `Room_public_identity_unique`
+and `sameRoomIdentity` **in the same commit** — the module's docblock says so,
+and that coupling is the whole reason the predicate is a named, unit-tested,
+greppable module rather than three `===` inline in a component.
+
+**What the review did NOT file, and why that is the notable part.** The
+five-agent pass found 24 defects and filed nothing — every one was fixable in
+place, and all 24 were fixed before merge. Three of them were guarantees that
+could be deleted with the suite still green (`updateRoomSchema`'s `.strict()`,
+the duplicate search's argument order, the column-default test), and one was a
+live TOCTOU race the feature work had itself opened: `PUT` read a room, checked
+`isPublic`, then wrote by `id` alone, while the new publish route could commit
+`isPublic: true` in between — with both controls rendered on the same page, so
+no second device was needed. That the round closed with zero new issues is a
+statement about this branch, not a trend; the previous round filed three from
+its review wave.
 
 ## This round's spin-outs (#249, PR #256) — two, and a fix that shipped broken twice in the same place
 
@@ -3132,7 +3230,8 @@ PR #93 ──closed──> #86            (archive rule)   └─ spun out ─�
 #67 (umbrella) ──closed──> settings_locked ✓ , public-room lock ✓ , #71 ✓
 #53 (umbrella) ──closed──> every mutating route now has HTTP coverage
 
-#60 (epic) ──subsumes──> #52 , and the admin-mediation of #73 / #76
+#60 (epic) ──subsumes──> #52 , and the admin-mediation of #76
+#73 ──closed──> PR #261 (entry to the lock, not the lock) └─ spun out ──> #259 , #260
 #77 ──closed──> PR #90 (hasClasses pinned) + PR #91 (public-or-own rule)
 
 #40 & #41 ── same root investigation ── CI flake cluster
@@ -3213,7 +3312,9 @@ minute before the cancel deadline is never repaired — accept it, allow a grace
 period for the *sweep only*, tighten the cadence at the window's end, or make the
 broadcast durable via an outbox; the last removes the whole class of defect and
 is the only one that is not a patch); #194 (withdraw the superseded classes, or
-leave them standing?); #73, #76, #52 (all → #60). **#192 was on this list and is
+leave them standing?); #76, #52 (both → #60) — **#73 was on this list and is
+closed** (PR #261 changed how a room enters the locked state and left the lock
+itself to #60). **#192 was on this list and is
 closed** (PR #204 resolved the decision by reporting both families) — removed
 2026-08-13 by the same sweep that recovered #113. **#220 was on this list and is
 closed** (PR #222 took the reconciliation-sweep option, then replaced its own
