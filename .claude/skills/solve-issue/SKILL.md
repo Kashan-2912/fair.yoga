@@ -267,6 +267,15 @@ an accessible name a screen-reader user cannot act on. Discovering a pre-existin
 passing does not make it someone else's problem; the person hitting it does not care which
 PR was open when it was found.
 
+**"Will hit", not "could hit" — and name what blocks it.** Reachability is part of the
+defect, so write the concrete path before judging it. When that path needs a state this
+system cannot produce — a stored `ClassStatus` of `full`, when the enum has five members and
+that is not one of them — it is not a live defect, and the four tests below govern it like
+any other finding. Decline it the way you reject a false positive: path written out, blocking
+condition named. Rarity is not that. A narrow route is still a route — `template-sync` admits
+an already-started class only east of UTC, and that is recorded as known-open precisely
+because someone will reach it. Reachability is the test, not frequency.
+
 The roadmap already draws this line — it tracks "live bugs, not just cleanup" and
 "someone is currently worse off" separately from everything else. Everything below governs
 that *everything else*: debt, taste, coverage gaps, design questions, and observations that
@@ -302,7 +311,9 @@ not theirs. Reject false positives with evidence and say so.
 **Sometimes the right home is a comment, not the tracker.** A gap that a future reader needs
 to know about *at the moment they touch that code* belongs beside the code — #128's
 accessible-name gap is pointed at from beside the button it describes. An issue nobody
-opens is worse than a comment everybody reads.
+opens is worse than a comment everybody reads. A reachable defect you are not fixing
+now is the same shape: mark it `known-open` beside the code, as `template-sync` is in
+`CLAUDE.md`.
 
 **Watch the ratio.** Note in the roadmap how many issues a round closed and how many it
 opened. One in, one leaf out is healthy. One in, three out needs a reason stated out loud.

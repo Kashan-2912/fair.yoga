@@ -476,6 +476,17 @@ force some of that order.
   check, and #148's arrives through a `...rest` spread so its name appears
   nowhere in the handler. Worth scheduling deliberately, not draining as backlog.
 
+  **A finding can be certain and still not worth filing — added 2026-08-18.**
+  `solve-issue` §7's floor exempted any "defect a user will actually hit" from
+  the four filing tests, and nothing defined *actually hit* — so a defect that
+  is certainly real but needs a state the system cannot produce went straight
+  to fixed-or-filed. The floor now asks for the concrete path and the state
+  that blocks it; a finding that cannot supply one falls back to the four tests
+  like any other, and one you are not fixing now is marked `known-open` beside
+  the code, as `template-sync` is in `CLAUDE.md`. **Rarity is explicitly not
+  the test** — `template-sync`'s own bug fires only east of UTC and is
+  recorded, not declined. Reachability is.
+
 ---
 
 ## Recommended sequence
