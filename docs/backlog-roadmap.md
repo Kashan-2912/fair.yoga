@@ -1,6 +1,19 @@
 # Open-issue roadmap & bundling
 
-**Snapshot:** 2026-08-17 (after #238 merged, PR #248) · **72 open issues**,
+**Snapshot:** 2026-08-18 (after #247 merged, PR #250) · **75 open issues**,
+re-counted with `gh issue list --state open --limit 200` = 75. Reconciles:
+72 + 1 (#249, filed mid-round by this branch, deliberately not fixed by it)
+− 1 (#247, PR #250) + 3 (#251, #252, #253, all from PR #250's review wave)
+= 75. **Three of the four movements came from reviewing, not from building** —
+the branch itself closed one (#247) and filed one (#249); its five-agent review
+wave filed the other three. Stated as this round's ratio and not as a trend:
+the immediately previous round (#238, PR #248) moved one each way, and the one
+before that (#240, PR #246) closed two and filed none. A first draft of this
+line called it "the fourth consecutive round" of review out-producing building,
+which the three sections below refute — the exact defect the round's own review
+was about, reproduced in the paragraph recording it.
+
+**Previous snapshot:** 2026-08-17 (after #238 merged, PR #248) · **72 open issues**,
 re-counted with `gh issue list --state open --limit 200` = 72. Reconciles:
 72 + 1 (#247, filed mid-round by this branch's own review) − 1 (#238, PR #248)
 = 72. **The number is unchanged and the set is not** — a round that closes one
@@ -2048,6 +2061,104 @@ schema-plus-middleware job — so it settled the controls instead.
   greps `cleanup` and picks the wrong one of two", which a signpost beside the
   function fixes and a backlog entry does not.
 
+## This round's spin-outs (#247, PR #250) — three, and a correctness argument that depended on a census
+
+~~**#247**~~ **CLOSED 2026-08-18** (PR #250, rebase-merged, 20 commits over
+8 non-test files: 7 in `src/` plus one migration). One out, four in across the
+round: **#249** filed by the branch itself, and
+**#251**, **#252**, **#253** from a five-agent review wave (comments, tests,
+error-handling, code, simplify; type-design skipped as not applicable).
+
+**#249 stays open on purpose and that is the interesting half of the scope
+decision.** #247's acceptance criteria describe two sequences and close only
+one. The branch froze the class at terminality; the PRE-terminal path — edit a
+live class's `date` into the past, let `autoTransitionToInProgress` then
+`autoCompleteClasses` walk it to `completed` legitimately, on a date older than
+the retention window — is untouched, and both guards are innocent there because
+the class was not terminal when the date moved. Bounding that input needs a
+product call about whether backfilling a past class is ever legal, so the
+branch filed the decision with four options rather than picking one inside a
+data-loss fix. `waitlist-retention.ts`'s header says this in the module that
+does the deleting, which is where a reader will meet it.
+
+The three review spin-outs are all hygiene rather than defects: **#251** a
+globally-scoped sweep whose returned count a test asserts is zero, so any
+suite's past-dated `in_progress` fixture reddens a file its author never
+touched (reproduced, and it self-heals because the sweep consumes the
+leftover); **#252** three defects sharing one cause — they live in an applied,
+checksummed migration and cannot be edited out; **#253** `slotTime`
+hand-copied into eight test files, each copy commenting that it mirrors the
+others.
+
+**The review found no correctness defect.** All five guard sites survived
+mutation testing, the 13-write-site census reproduced exactly, and gate 4 was
+clean — the ownership 403 runs before `parseBody`, so the new 409 is
+unreachable by a non-owner and there is no 409-vs-404 enumeration oracle.
+Everything it found was a claim that was wrong, or a gap *around* the guard.
+
+### The finding this round is actually about
+
+**A correctness argument that rests on a whole-repo census has made the census
+its weakest link, and the census is the part nothing can keep true.**
+
+`isTerminalStatusViolation` matched only the typed (`Unknown`) Prisma error
+shape. A raw-query fire of the same trigger arrives as `P2010` and therefore
+classified 500 rather than 409. That was recorded as a deliberate choice, and
+defended — at length, in three places — on the grounds that it is unreachable:
+the only raw statements in `src/` touching `Class` are `SELECT … FOR UPDATE`
+and the lock-timeout `SET`, none of which can fire a `BEFORE UPDATE` trigger.
+
+The reasoning was correct. It was also, by the time it shipped, **already false
+as written** — `class-terminal-date.test.ts` is in `src/` and contains three
+raw `UPDATE "Class" SET date` statements, so the sentence was refuted by the
+test file the same branch added to prove the trigger. The intended scope was
+"production code in `src/`"; that is not what it said, and a reader running the
+implied grep meets the counterexample immediately. The census had drifted
+between being written and being merged, inside one branch.
+
+The repair was not to fix the sentence. It was to **delete the dependency**:
+match both error shapes, the way `isTransientDbError` twenty lines below had
+already settled the identical question for `55P03`, on the identical reasoning
+(both shapes mean the same thing to a caller, so a matcher built for one
+silently misses the other). **The widened matcher is two lines SHORTER than the
+narrow one** — 5 against 7 — and it took with it the two paragraphs and the
+test docblock that argued unreachability, the census inside them, and every
+future obligation to re-verify it. The narrow version was not the cheap option
+in any dimension; it only looked conservative.
+
+**The generalisable rule: prefer handling the case to proving it cannot
+happen.** "Unreachable because nothing else in the repo does X" is only as true
+as the last grep, it decays silently, and it has to be re-established by every
+reader who wants to trust the branch. This file already records the sibling
+lesson from #238's round — that a plausible review finding is indistinguishable
+from a measured one until someone measures it. This is its converse: a
+*measured* claim about a moving target expires, and the fix is usually to stop
+needing the measurement.
+
+Two smaller notes from the same wave, both worth keeping:
+
+**Three of five independent agents found the same defect**, and it was the one
+the branch was best defended against. "The early return is an optimisation for
+every case but one" was asserted in two source comments, the spec's §3.4
+heading *and* body, and the plan's mirror — while the branch's own test
+`'answers terminal, not no_fields, for a body that asks for nothing'` states
+the second case in its docblock. The claim and its refutation shipped in the
+same commit, after five review rounds aimed specifically at this defect class.
+**Convergence between independent reviewers is worth weighting**; so is the
+observation that the cheapest defect to find is a claim contradicted by a test
+in the same diff, and it is the one the author is least able to see.
+
+**The log level was carrying information the classification could not.** Both
+terminality triggers map to one 409 with one message, correctly — they mean the
+same thing to a teacher. They do not mean the same thing to an operator: a
+status fire is a lost CAS race, while a date fire is *structurally impossible*
+while `updateClass` is the only writer of `Class.date` and its CAS excludes
+terminal rows. So a date fire can only mean an unguarded writer of the column
+`reapClosedWaitlistEntries` reads before it DELETEs has appeared — and it was
+logging at the level a lock timeout logs at. **A guard that cannot fire is more
+alarming when it fires than one that races**, which is the opposite of the
+intuition that "unreachable" implies "low severity".
+
 ## This round's spin-outs (#238, PR #248) — one, and a review finding that measurement withdrew
 
 ~~**#238**~~ **CLOSED 2026-08-17** (PR #248, rebase-merged, 20 commits). One in,
@@ -2840,6 +2951,13 @@ PR #93 ──closed──> #86            (archive rule)   └─ spun out ─�
 #83 ── CLOSED (PR #230). The "widening two signatures" premise was wrong:
        updateClassTemplate needed none, syncTemplateInstances needed a
        NARROWING to TransactionClientOnly. Spun out #231, #232, #233.
+
+#247 ──closed──> PR #250 └─ spun out ──> #249 (by the branch) , #251 , #252 , #253
+#247 ── the branch closed the terminal half and filed the PRE-terminal half
+       (#249) rather than deciding a product question inside a data-loss fix.
+       Its review found no correctness defect and four false claims, each
+       refuted locally — one sentence away, eight lines below, or by a test in
+       the same commit.
 
 #238 ──closed──> PR #248 └─ spun out ──> #247
 #238 ── the issue asserted a migration; the plan measured instead and shipped
