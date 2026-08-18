@@ -1,6 +1,34 @@
 # Open-issue roadmap & bundling
 
-**Snapshot:** 2026-08-18 (after #247 merged, PR #250) · **75 open issues**,
+**Snapshot:** 2026-08-18 (after #249 merged, PR #256) · **78 open issues**,
+re-counted with `gh issue list --state open --limit 200` = 78. Reconciles:
+75 − 1 (#249, PR #256) + 2 (#257, #258, from this round's review)
++ 2 (#254, #255) = 78.
+
+**Two of those four are not this round's, and separating them is the whole
+point of re-deriving rather than carrying forward.** #254 and #255 were filed
+at 08:06Z and 08:54Z on the 18th — after the previous snapshot's round closed
+and before this one's review ran — and neither touches #249's area (they are
+about the verify rail and about walk-ins). Folding them into "four filed by
+the review wave" would have produced the correct total from a false story, which
+is the compensating-error shape the 2026-08-15 line below was written to catch.
+This round filed **two**, both from its own review.
+
+**One out, two in, and both of the two are scope decisions rather than
+defects.** #257 (`template-sync` is a third, unguarded writer of a class's
+start instant) and #258 (`defaultTimezone` is hardcoded at signup and the
+picker offers 26 zones) were each found by asking what the branch's own claims
+did NOT cover. Neither was fixed here because both need a product call — the
+same reason #249 itself was filed rather than folded into #247.
+
+PR #256: 18 commits (6 `fix`, 4 `feat`, 4 `docs`, 2 `spec`, 1 `test`, 1
+`plan`) over 18 files in `src/` and `tests/`. **Six `fix` commits on a branch
+whose feature was four**, because the round ran review → fix → scoped
+re-review, and the re-review found two defects the fix round had introduced
+while repairing their twins. That ratio is the round's finding, and it is
+recorded below rather than treated as overhead.
+
+**Previous snapshot:** 2026-08-18 (after #247 merged, PR #250) · **75 open issues**,
 re-counted with `gh issue list --state open --limit 200` = 75. Reconciles:
 72 + 1 (#249, filed mid-round by this branch, deliberately not fixed by it)
 − 1 (#247, PR #250) + 3 (#251, #252, #253, all from PR #250's review wave)
@@ -423,7 +451,7 @@ force some of that order.
 | 4 | CI reliability & framework upkeep | ~~#185~~ ✓, ~~#41~~ ✓ (PR #188) — premise disproved; ~~#40~~ ✓ (PR #198) — nine components, not one, and its framework half closed unverified; then #127 (+#189) | none, but hard/uncertain |
 | 5 | Room lifecycle & admin (epic #60) | #73 + #76 + #52 | **product decision** |
 | 6 | Feature backlog | ~~#119 + #120~~ ✓; ~~#112~~ ✓; #47, then #46 / #48 / #49 / #51 | product priority |
-| 3c | **This week's spin-outs** — see below | ~~#146 + #148~~ ✓ done together (PR #163); #145 + #157 (together), #164, #162, #154, #142, #143, #147, #158, #161 | two are decisions (#147, #164) |
+| 3c | **This week's spin-outs** — see below | ~~#146 + #148~~ ✓ done together (PR #163); #145 + #157 + **#258** (together — one column failing at three layers, see #249's round), #164, #162, #154, #142, #143, #147, #158, #161 | three are decisions (#147, #164, #258) |
 
 - ~~**#170 — emails normalized only in the two tables #166 added.**~~ **DONE —
   PR #184, rebase-merged 2026-08-07.** 23 commits. What the work taught, beyond
@@ -2061,6 +2089,129 @@ schema-plus-middleware job — so it settled the controls instead.
   greps `cleanup` and picks the wrong one of two", which a signpost beside the
   function fixes and a backlog entry does not.
 
+## This round's spin-outs (#249, PR #256) — two, and a fix that shipped broken twice in the same place
+
+~~**#249**~~ **CLOSED 2026-08-18** (PR #256, rebase-merged, 18 commits over 18
+files in `src/` and `tests/`). One out, two in: **#257** and **#258**, both
+from the review wave, both scope decisions rather than defects.
+
+**#257** — `template-sync.ts` rewrites `startTime` on a template's instances
+through a bare `updateMany`, past no past-start guard, selecting them with
+`date: { gt: now }` — a `@db.Date` calendar date compared against an instant.
+That is not the same predicate as "this class has not started": measured, an
+Auckland teacher's class dated tomorrow at 00:30 local started eight hours ago
+and still satisfies the filter. So the branch's "two doors" framing was a
+scope, not an inventory, and it had already been copied into four artifacts as
+though it were closure. **#258** — `defaultTimezone` is hardcoded to
+`Europe/Amsterdam` at signup with no inference, so both new guards decide in
+the wrong zone for most of the world; and the Settings picker that could
+correct it lists 26 zones with nothing in Asia, Africa, South America or NZ, so
+an Auckland teacher cannot express the right answer at all. Both were left open
+for the same reason #249 was: closing them decides a product question, and
+#249's own history is the argument for not deciding those inside a fix.
+
+**Where the two belong.** #258 goes with **#145** and **#157** in bundle 3c,
+and the three make a sharper set together than any of them does alone — they
+are the same column failing at three different layers. #258: the stored value
+is wrong by default and, for most of the world, cannot be corrected through the
+UI. #145: an *invalid* value degrades every teacher date to UTC without
+throwing. #157: nothing watches the warnings either degradation writes. Fixing
+#145 alone hardens a column whose common failure is a valid-but-wrong value it
+cannot detect; fixing #258 alone leaves the silent fallback. **This round also
+made #157 slightly worse on purpose** — both new refusals log at `info` with
+the fields that separate their three causes, and by #157's argument nobody is
+reading them. That was still the right call (a refusal that leaves no trace is
+worse than one nobody has read yet), but it is a debt this file should hold
+rather than a feature. #257 has no natural bundle: it is one function in
+`template-sync.ts` and a semantics question about recurring classes.
+
+**Two of the review's own findings did not survive measurement, and that is
+worth recording in both directions.** The review reported the date-picker bug
+as affecting both class forms; the create wizard's `if (loading)` early return
+means its date field never exists in server HTML, so it was already correct —
+by accident of an unrelated fetch gate, which is why it uses the hook anyway.
+It also reported the `updateClass` field gate as inert, with the deletion
+proven by a green suite; that was true when measured and stopped being true
+three commits later, when failing closed made two `NaN` instants compare
+unequal and the gate became the only thing stopping a description-only edit
+from being refused. This file already records #238's lesson that a plausible
+review finding is indistinguishable from a measured one until someone measures
+it. **This round is its mirror: a measured finding expires too, and a fix
+landing in the same file is enough to expire it.**
+
+### The finding this round is actually about
+
+**A fix verified only in the environment the test can see is not verified, and
+this one shipped broken twice in the same three lines before that was noticed.**
+
+`min={todayLocal()}` on the two class date pickers bounded them at UTC's
+calendar day. The first repair replaced the UTC read with a local one and
+asserted the attribute in jsdom — against `new Date().toISOString().slice(0,
+10)`, the same expression the component used, so both sides moved together and
+the test could not fail. That failure mode is already in this file, and the
+commit fixing it said so in its own message.
+
+The second repair fixed the expression and pinned a literal clock, so the test
+could fail. It still shipped broken. Both consumers are `'use client'`
+components under `(teacher)/layout.tsx`, which awaits `getSession()` and a
+Prisma count — so Next.js server-renders them per request, in the container's
+zone, and no `TZ` is set in the Dockerfile or either compose file. That zone is
+UTC. React 19.2.7 then KEEPS the server's attribute through hydration rather
+than replacing it with the client's: measured, server `2026-08-19`, client
+`2026-08-18`, recoverable errors `0`, server value survives.
+
+**jsdom has no server.** A component test renders once, in one process, in one
+zone — so the production failure mode is not merely untested there, it is
+*unreachable*. The test was correct, falsifiable, and blind. The second fix's
+own commit message closed by recording the remaining gap as "the device's zone,
+not `Teacher.defaultTimezone` — those agree unless the teacher is travelling",
+which was precise about the wrong axis while the server/client axis went
+unmentioned.
+
+The repair was to stop the server having an opinion: `useTodayLocal`
+(`useSyncExternalStore` with a `getServerSnapshot` returning `undefined`) emits
+no bound server-side and lets the browser supply the day. The tests that now
+hold it are three, deliberately, because no one of them sees the whole
+sequence: `renderToStaticMarkup` asserts the server emits nothing,
+`renderToString` + `hydrateRoot` asserts the client's value arrives on the same
+DOM node, and a plain client mount asserts it is there immediately. **The
+hydration one was added because neither of the others runs what a browser
+runs** — and it first failed by breaking its neighbour, since Testing Library
+only cleans up containers it created.
+
+**The generalisable rule: ask what the test environment cannot express, not
+just what the test asserts.** "Can this test fail?" was asked and answered
+correctly here. The question that would have caught it is "can this test
+environment produce the bug?" — and for anything whose behaviour differs
+between server and client, host and browser, or one zone and another, a
+single-process test says nothing about the axis that matters.
+
+Two smaller notes, both from the scoped re-review:
+
+**Fixing a defect class one instance at a time reproduces it.** Making
+`startsInPast` fail closed made an Invalid Date reachable on the refusal path —
+where the log line then called `toISOString()`, which throws on exactly that
+input. A guard added to turn a silent wrong answer into a clean 409 turned it
+into a 500 instead, and the commit shipped a comment claiming "the callers
+NaN-check their own instants" when three of four did. Separately, moving the
+timezone misattribution out of `classStartInstant` relocated it: `Date.UTC`
+returns `NaN` for a bad YEAR as readily as a bad hour, so a broken date was
+logged as an unparseable `startTime`. Before the guard a bad time was blamed on
+the zone; after it a bad date was blamed on the time. **Both repairs were the
+same shape — replace the repeated hand-check with one named function
+(`isoOrNull`), and split the combined test into one per cause** — and both are
+the "prefer handling the case to proving it cannot happen" rule from #247's
+round, applied to a claim about sibling call sites rather than about the repo.
+
+**Convergence again, and this time between a human pass and an agent pass.**
+The `RangeError` above was found independently by both halves of the scoped
+re-review, within minutes of each other, on a branch that had already been
+through a five-agent wave. #247's round recorded that convergence between
+independent reviewers is worth weighting; the addition here is that the
+re-review found nothing the *original* wave had missed — every one of its
+findings was about code the fix round had written. **A fix round needs its own
+review, and it is not the same review.**
+
 ## This round's spin-outs (#247, PR #250) — three, and a correctness argument that depended on a census
 
 ~~**#247**~~ **CLOSED 2026-08-18** (PR #250, rebase-merged, 20 commits over
@@ -2951,6 +3102,16 @@ PR #93 ──closed──> #86            (archive rule)   └─ spun out ─�
 #83 ── CLOSED (PR #230). The "widening two signatures" premise was wrong:
        updateClassTemplate needed none, syncTemplateInstances needed a
        NARROWING to TransactionClientOnly. Spun out #231, #232, #233.
+
+#249 ──closed──> PR #256 └─ spun out ──> #257 , #258
+#249 ── the picker fix shipped broken TWICE: once against a test that compared
+       the attribute to the expression producing it, once against a test jsdom
+       could not fail in principle (no server, one zone). Both guards' zone
+       reads were also untested until this round. Two of the review's own
+       findings did not survive measurement, one of them because a later commit
+       on the same branch expired it.
+#249 ── its scoped RE-review found two defects the fix round had introduced
+       while repairing their twins, and nothing the original wave had missed.
 
 #247 ──closed──> PR #250 └─ spun out ──> #249 (by the branch) , #251 , #252 , #253
 #247 ── the branch closed the terminal half and filed the PRE-terminal half
