@@ -1,6 +1,78 @@
 # Open-issue roadmap & bundling
 
-**Snapshot:** 2026-08-19 (after #76 merged, PR #262) · **78 open issues**,
+**Snapshot:** 2026-08-19 (after #103 merged, PR #264) · **80 open issues**,
+re-counted with `gh issue list --state open --limit 200` = 80. Reconciles:
+78 − 1 (#103, PR #264) + 2 (#266, #267, both spun out of the PR review) + 1
+(**#265, filed by the maintainer at 16:35Z, outside this round**) = 80.
+**One in, two out.**
+
+**The extra +1 is why the arithmetic is written out.** Without #265 named, the
+sum reads 79 against a measured 80 and the next round inherits a one-issue
+error as its baseline — the precise corruption §8 says the open count cannot
+reveal on its own.
+
+**What this round is actually about: a fix that made a guard untestable, and
+nobody noticed for three review passes.** Both delete routes got a pre-check
+*and* a foreign-key backstop. They answered with the same status, the same
+body and the same error code — so `if (false && ...)` on the pre-check left
+**every test in the integration project green**. The pre-check is the half
+`docs/lock-order.md` credits with closing an AB-BA cycle against the generator
+sweep; the backstop cannot close it, because it runs after the `DELETE` has
+taken its locks. A guard that cannot fail is this project's signature defect,
+and this is the first time the branch *introduced* one as a side effect of a
+correct fix rather than shipping one it wrote.
+
+**Two mechanisms fixed it, and the cheap one was invisible until the expensive
+one existed.** The backstop now answers `ROOM_IN_USE_RACE` where the pre-check
+answers `ROOM_IN_USE`, so every pre-check case asserts which guard replied —
+deterministic, instant, and it took one constant. But a code assertion still
+passes if someone moves the pre-check *below* the delete in the same handler,
+so each suite also holds `FOR UPDATE` on the `ClassTemplate` row the RESTRICT
+trigger needs `FOR KEY SHARE` on: with the pre-check the route refuses without
+issuing the `DELETE`, without it the `DELETE` waits. Measured, both pre-checks
+disabled: 6 failures — 4 instant code assertions at 16-33 ms and 2 lock cases
+at ~3 015 ms. Before, the same mutation produced 2 failures, both at 5 s.
+
+**The lock case is the only test in this repo whose passing depends on
+wall-clock latency**, which is worth knowing before the next one is written.
+Its first version used a 5 000 ms sentinel — colliding exactly with vitest's
+default `testTimeout`, which won every time, so the diagnostic assertion was
+dead and a real regression reported "Test timed out in 5000ms". That reads as
+flake, the one meaning a lock test must never carry. The identical collision
+had already been found and fixed one layer down (Prisma's interactive-
+transaction default is also 5 000 ms, which is what `{ timeout: 20_000 }` is
+for) and was still missed a layer up.
+
+**Four separate false claims about the schema shipped inside the branch and
+were caught by review, not by tests.** A comment asserting a CASCADE that a
+RESTRICT forbids; a spec section justifying a transaction with a window only a
+redundant statement opens; a `modelName` justification wrong at **seven**
+sites; and a new `lock-order.md` paragraph claiming a second, unclosable
+deadlock cycle that the shipped guard in fact closes. None was catchable by any
+test — every one was a claim about *why* the code is right.
+
+**The fix wave then repeated its own failure, in the same files, one commit
+later.** The `modelName` finding named seven locations; the wave fixed five.
+Caught by reconciling against the finding's location list. The very next
+finding — the refusal-message change — named fifteen locations and the wave
+fixed seven. §8's rule ("a finding that names N locations gets N verdicts") is
+not a formality: it fired twice on one branch, after being read.
+
+**Agents mutating a shared working tree corrupt each other's measurements,
+reliably.** Round one produced a false CRITICAL (one agent reported both
+backstops disarmed; it was another agent's in-flight mutation). Round two
+produced a false flake report (one agent measured "2 of 6 full runs fail";
+the other was mutating the pre-check at the time, which makes exactly those
+two cases block for 5 s and nothing else). Both were resolved by measuring
+directly rather than averaging the reports. The previous snapshot already
+recommended `isolation: "worktree"` as the default for review fleets; this
+round is the second consecutive one to pay for not doing it.
+
+PR #264: 12 commits (5 `docs`, 4 `fix`, 2 `feat`, 1 `test`) over 12 files.
+**Four `fix` commits on a branch whose feature was two**, and three of the four
+came from review rounds rather than from building. Counted from `git log`.
+
+**Previous snapshot:** 2026-08-19 (after #76 merged, PR #262) · **78 open issues**,
 re-counted with `gh issue list --state open --limit 200` = 78. Reconciles:
 79 − 1 (#76, PR #262) + 0 filed = 78. **One in, none out** — the first round
 that closed an issue and opened nothing.
@@ -2247,6 +2319,102 @@ schema-plus-middleware job — so it settled the controls instead.
   greps `cleanup` and picks the wrong one of two", which a signpost beside the
   function fixes and a backlog entry does not.
 
+## This round's spin-outs (#103, PR #264) — two, and a guard the fix itself made untestable
+
+Both are **pre-existing** and neither was created by this branch, which is the
+test §7 puts third. They are here anyway because §7's floor overrides it: a
+defect a user will actually hit is fixed or filed every time, and "I only saw it
+because I was passing through" is not a reason to leave it unrecorded.
+
+**#267 — `delete-room-button` reports every non-JSON server error as a network
+error.** `res.json()` sits inside the outer `try`, so an Nginx 502, a Next.js
+HTML error page or a truncated body all land in `catch { setError('Network
+error. Please try again.') }`. The network was fine; the server failed
+deterministically, and the teacher retries against something retrying cannot
+fix. The bare `catch {}` binds nothing, so the underlying error is discarded
+rather than merely unreported. A leaf: `readErrorMessage` exists, and
+`unlink-room-button.tsx` — the sibling button on the same screen — already uses
+it. Filed rather than folded because the component is not in the branch's diff
+and this branch does not change how often the path is hit (the old 500 and the
+new 409 are both JSON).
+
+**#266 — the delete door names a remedy the archive door can refuse.** Filed
+*as a decision*, not as work, per §7's second test. The delete door refuses with
+"Archive it instead"; the archive door refuses a room holding an `open` class or
+a live template. Two of the four blocker states are dead ends as far as the
+message goes. **The common one predates #103 entirely** — any room with an
+upcoming class — and this branch only extends it from classes to templates.
+
+The ruled-out option is recorded in the issue because it is the obvious one:
+reuse `describeRoomBlockers`. It cannot be reused, and the reason is exact —
+it says "unfinished class", meaning `BLOCKING_CLASS_STATUSES`
+(`open`/`in_progress`), while the delete door counts **every** class because a
+foreign key does. Three completed classes would read "3 unfinished classes
+still use this room", which is the same defect `room-archive.ts:74-79` already
+documents itself fixing, in a different word.
+
+### The finding this round is actually about
+
+**A correct fix made an existing guard untestable, and three review passes read
+past it.** The `Class` pre-check on both delete routes used to be pinned by its
+own failure mode: drop it and the route 500s. Adding the foreign-key backstop
+converted that signal into a byte-identical 409 — same status, same body, same
+`ROOM_IN_USE` code. From that commit on, `if (false && ...)` on the pre-check
+left the entire integration project green.
+
+That matters more than a coverage gap, because the pre-check is not there for
+the status. It is there so the `DELETE` is never issued, which is what keeps the
+RESTRICT trigger from taking `FOR KEY SHARE` on a `ClassTemplate` row the
+generator sweep holds `FOR UPDATE` — the AB-BA edge `docs/lock-order.md`
+records. The backstop cannot substitute: it runs *after* those locks are taken.
+Both handlers carried a comment saying exactly this, in capitals. The comment
+was true and unenforced, which is the condition this project keeps rediscovering
+— **a reviewer who reads a guard confirms it; one who breaks it finds it cannot
+fail.**
+
+The generalisable form: **when you add a second mechanism that produces the same
+observable as the first, you delete the first one's test signal.** Nothing fails,
+so nothing tells you. The fix is to make the two observably different at the
+seam you already control — here, one constant (`ROOM_IN_USE_RACE`) — before
+reaching for the expensive instrument. The lock-hold test is still needed,
+because a code assertion cannot see a pre-check moved *below* the delete inside
+the same handler; but it is the second line, not the first.
+
+**Four false claims about the schema shipped inside the branch, and no test
+could have caught any of them.** A comment asserting a CASCADE that a RESTRICT
+forbids; a spec section justifying a transaction against a window that only a
+redundant statement opens; a `modelName` justification wrong at seven sites and
+disprovable by the branch's own recorded mutation output; and a `lock-order.md`
+paragraph claiming a second unclosable deadlock cycle that the shipped guard
+closes. Every one is a claim about *why* the code is right — the category tests
+are structurally blind to, and the reason this repo's review rounds are worth
+their cost.
+
+**§8's "N locations, N verdicts" rule fired twice on one branch, after being
+read.** The `modelName` finding named seven locations and the fix wave corrected
+five. The next finding named fifteen and the wave corrected seven. Both misses
+were in the plan and handover — the same two files, both times — and both were
+found by reconciling against the finding's own location list rather than by
+trusting the wave's report. The corollary is now demonstrated twice on one
+branch: **a fix wave's own report is not evidence.**
+
+**Second consecutive round to pay for sharing one working tree between review
+agents.** Round one: an agent reported both backstops disarmed as CRITICAL — it
+was another agent's in-flight mutation, and `git diff main...HEAD` was clean the
+whole time. Round two: an agent reported the new lock tests failing "2 of 6 full
+runs" while a sibling agent was mutating the pre-check, which makes exactly those
+two cases block and nothing else. Both resolved by measuring directly (four full
+`--project integration` runs, 437/437, 16-20 ms) rather than by weighing the two
+reports against each other. The previous snapshot already recommended
+`isolation: "worktree"` for review fleets. It should stop being a recommendation.
+
+**One honest loose end.** A single unidentified test failed once in the full
+suite, in the run that started seconds after a mutation was restored, and did
+not reproduce across four consecutive full runs or two CI runs on clean
+production builds. Most likely dev-server recompilation lag against a
+just-restored file. It was never identified, and is recorded here rather than
+written off.
+
 ## This round's spin-outs (#73, PR #261) — two, filed before any code was written
 
 ~~**#73**~~ **CLOSED 2026-08-18** (PR #261, rebase-merged, 19 commits over 30
@@ -3354,13 +3522,30 @@ PR #93 ──closed──> #86            (archive rule)   └─ spun out ─�
 **Standalone quick wins, any time:** #189 (one test, no timers, and its fixtures
 already exist in `notifications-stream.test.ts`). (#59, #58, #81+#85, #101, #115
 all done.)
-**Live bugs, not just cleanup:** #103's second half (500 on room delete), #193
-(a committed toggle reports "Network error", then answers the retry with
-silence), #194 (editing a studio template's day leaves its old classes
-standing). **Every number in this list re-derived against `gh issue view` on
-2026-08-19**, after PR #262 merged — 25 issues, one call each, across all three
-triage lists. **No rot found this round**, which is worth recording because the
-previous two rounds each found some. #101, #115, #119, #120, #112, #199, #212,
+**Live bugs, not just cleanup:** #193 (a committed toggle reports "Network
+error", then answers the retry with silence), #194 (editing a studio template's
+day leaves its old classes standing), **#267** (`delete-room-button` reports
+every non-JSON server error as "Network error" — `res.json()` sits inside the
+outer `try`, so an Nginx 502 or an HTML error page reads as a transport failure
+and the teacher retries forever against a deterministic server fault; the
+sibling button on the same screen already uses `readErrorMessage`), and
+**#265** (archiving a student changes only which CRM list they appear in —
+filed by the maintainer this round, not spun out of it).
+
+**#103 came off this list and is closed** (PR #264). Note what it was on the
+list *for*: "#103's second half (500 on room delete)" — the half the issue
+itself called the cheaper of the two. It was, and the expensive half came free,
+because the deadlock needs a `ClassTemplate` row to exist and the guard that
+stops the 500 is the guard that stops the `DELETE` being issued. **#193 and
+#267 are the same defect in two components** and should be read together; #267
+is the more mechanical of the pair.
+
+**Every number in this list re-derived against `gh issue view` on 2026-08-19**,
+after PR #264 merged — 18 issues, one call each, across all three triage lists.
+**No rot found this round.** #103 was on this list and is legitimately closed
+(PR #264, merged 18:31Z, closed by the PR body's `Closes #103`); the other 17
+were each confirmed still OPEN. That is two consecutive clean rounds after two
+that each found rot. #101, #115, #119, #120, #112, #199, #212,
 **#220** and **#113** were on this list and are legitimately closed; the three
 that remain (#103, #193, #194) were each confirmed still OPEN.
 
@@ -3421,7 +3606,10 @@ minute before the cancel deadline is never repaired — accept it, allow a grace
 period for the *sweep only*, tighten the cadence at the window's end, or make the
 broadcast durable via an outbox; the last removes the whole class of defect and
 is the only one that is not a patch); #194 (withdraw the superseded classes, or
-leave them standing?); #52 (→ #60) — **#76 was on this list and is closed**
+leave them standing?); **#266** (the delete door names a remedy the archive door
+can refuse — filed *as* a decision with three options laid out, per §7's second
+test, because "make the message right" needs the two doors' contract settled
+before anyone can start); #52 (→ #60) — **#76 was on this list and is closed**
 (PR #262 took the issue's own option 3, *archive instead of delete*; the
 `isPublic` lock and #52's admin-mediation question are untouched). **#73 was
 on this list and is closed** (PR #261 changed how a room enters the locked state and left the lock
