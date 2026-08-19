@@ -1,6 +1,79 @@
 # Open-issue roadmap & bundling
 
-**Snapshot:** 2026-08-18 (after #73 merged, PR #261) · **79 open issues**,
+**Snapshot:** 2026-08-19 (after #76 merged, PR #262) · **78 open issues**,
+re-counted with `gh issue list --state open --limit 200` = 78. Reconciles:
+79 − 1 (#76, PR #262) + 0 filed = 78. **One in, none out** — the first round
+that closed an issue and opened nothing.
+
+**Nothing was filed because nothing needed to be**: the five-agent review
+produced **21 distinct findings after de-duplication** — the door-5 defect
+alone was reported by four of the five agents, by four different methods — and
+every one was either fixed on the branch (18) or declined with evidence (3:
+`ArchiveRoomButton` discarding `action`, `slot_conflict`'s message, and a
+"dirty working tree" that was the sibling agents' own in-flight probes).
+De-duplicated by hand from the five reports, because the raw finding count
+across them is about 34 and counting that would have overstated the round. The one candidate left standing is
+the generator's blind spot — a template left active on a room archived *before*
+this branch keeps generating into it — which is carried as `known-open` beside
+the read site (`class-generator.ts:359-367`) and in spec §10 rather than on the
+tracker. It is reachable and it needs a product call, so it is a defensible
+filing; it is recorded here so the next round can make that call deliberately
+rather than rediscover it.
+
+**The round's most useful output is that a review round's own fix was wrong,
+and the review that checked it agreed.** The whole-branch review found a fifth
+door (`updateClassTemplate` could relocate a template onto an archived room)
+and closed it with `if (teacherRoom.isArchived && template.isActive)`, arguing
+symmetry with door 3. The scoped re-review verified the gate *fired* and passed
+it. Both missed what it let through: pausing deletes nothing, so a paused
+template still owns the `open` instances it generated, and `syncTemplateInstances`
+carries all of them onto the archived room in the same transaction. One `PUT`
+moved four bookable classes onto a shelved room — the exact state door 1 exists
+to refuse, produced one step after door 1 refused it. Four of the five PR-review
+agents found it independently, by four different methods.
+
+**The generalisable form: door 3 gates on the DIRECTION of a verb, door 5 was
+given a PROPERTY of the template, and "symmetrical with" hid the difference.**
+A justification that transfers by analogy has to be re-derived at the second
+site, because the *reason* is what transfers, not the shape.
+
+**Seven guards on this branch existed and could not fail** — the count that
+matters, and the same shape every time: argued for in prose more rigorously
+than enforced by a test, so a reviewer reading them was persuaded and a
+reviewer breaking them was not. Door 2's ordering and its status clause, door
+5's ownership ordering, `GET /api/teacher-rooms`'s `isArchived` field (whose
+removal left 235 component tests green while both pickers silently stopped
+filtering, because `!undefined` is truthy), `class/new`'s filter and empty
+state (deleted outright, 235 tests green — `TemplateForm` got three tests for
+the identical change and this wizard got zero), `ArchiveRoomResult`'s `ok: true`
+half, and a forbidden-field-list deletion. All seven are now pinned by the
+mutation that catches them, spec §9 mutations 10-16.
+
+**Eleven line citations were wrong, and the procedural fix is the durable
+part.** Most drifted because *this branch's own insertions* moved the target:
+a commit that inserts lines above a cited line invalidates every citation below
+it in that file. Two were declared fixed and were not — one commit announced
+section 4's door table re-derived while door 2's entry in that same table still
+carried its pre-branch number. The cause both times was a check that PRINTED
+citations for a human to eyeball. Rewritten as an assertion — resolve each
+cited line, match it against the token the prose claims is there, fail on
+mismatch — it caught the outstanding misses on its first run and then caught
+two more the same session's edits had just created.
+
+**Process note for the next multi-agent round:** five review agents shared one
+working tree and interfered — one restored another's in-flight mutation
+mid-run, and a third got a false "pin did not fire" from a stale
+`tsconfig.tsbuildinfo` (this repo sets `incremental: true`). Two agents worked
+around it by building isolated copies; that should be the default given to
+them (`isolation: "worktree"`), not something each has to invent.
+
+PR #262: 28 commits (15 `docs`, 5 `fix`, 5 `feat`, 2 `test`, 1 `refactor`) over
+25 files, 23 of them in `src/`, `tests/` and `prisma/`. **Five `fix` commits on
+a branch whose feature was five, and all five came from a review round rather
+than from building** — two from task review, one from the whole-branch review,
+and two from the PR review. Counted from `git log`.
+
+**Previous snapshot:** 2026-08-18 (after #73 merged, PR #261) · **79 open issues**,
 re-counted with `gh issue list --state open --limit 200` = 79. Reconciles:
 78 − 1 (#73, PR #261) + 2 (#259, #260, both spun out of this round's spec
 before any code was written) = 79.
@@ -501,7 +574,7 @@ force some of that order.
 | 3 | Unpinned-list cleanup & types | ~~#59~~ ~~#58~~ ~~#81+#85~~ ~~#101+#115~~ ~~#96~~ ~~#138~~ ~~#136~~ ~~#140~~ ~~#39~~ ~~#121~~ done, then #132 + #133 + #134 | one design call left (#133) |
 | 3b | Locking follow-ups | ~~#107~~ ✓, ~~#113~~ ✓ (PR #227), ~~#180~~ ✓ (PR #230); #116 + #117 + #126, #103, #104, #122, #229, #232 | one decision (#229) |
 | 4 | CI reliability & framework upkeep | ~~#185~~ ✓, ~~#41~~ ✓ (PR #188) — premise disproved; ~~#40~~ ✓ (PR #198) — nine components, not one, and its framework half closed unverified; then #127 (+#189) | none, but hard/uncertain |
-| 5 | Room lifecycle & admin (epic #60) | ~~#73~~ ✓ (PR #261) — rooms born private, sharing behind its own door; then #76 + #52 + **#259** + **#260** | **product decision** (the lock itself stands) |
+| 5 | Room lifecycle & admin (epic #60) | ~~#73~~ ✓ (PR #261) — rooms born private, sharing behind its own door; ~~#76~~ ✓ (PR #262) — `isArchived` given downstream meaning by five doors; then #52 + **#259** + **#260** | **product decision** (the lock itself stands) |
 | 6 | Feature backlog | ~~#119 + #120~~ ✓; ~~#112~~ ✓; #47, then #46 / #48 / #49 / #51 | product priority |
 | 3c | **This week's spin-outs** — see below | ~~#146 + #148~~ ✓ done together (PR #163); #145 + #157 + **#258** (together — one column failing at three layers, see #249's round), #164, #162, #154, #142, #143, #147, #158, #161 | three are decisions (#147, #164, #258) |
 
@@ -1888,9 +1961,23 @@ into.** Hold a product-decision pass across the cluster before any code.
   sharing is `POST /api/rooms/[id]/publish`, guarded creator-first with a
   duplicate check in front of it. The issue's "API-only, lower urgency" premise
   was false — the lock was the default outcome of the only creation flow.
-- **#76 — room deletion blocked forever** by cancelled/completed classes (no
-  status filter on the count). Three real options in the issue: keep + reword,
-  filter by status, or archive via the unused `TeacherRoom.isArchived`.
+- ~~**#76 — room deletion blocked forever**~~ **✓ closed 2026-08-19 (PR #262).**
+  Took the issue's option 3, *archive instead of delete*. **The issue's premise
+  was substantially false and this list carried the false phrasing**: archiving
+  had already shipped in `e57b8bd` on 2026-04-05, three and a half months before
+  the issue was filed, with four consumers — so "the unused
+  `TeacherRoom.isArchived`", copied verbatim into this file, was never true.
+  Two of the issue's other three claims also failed: a teacher was NOT stuck
+  with the room in their list (archiving already removed it), and the issue
+  quoted one delete route when there are two, the sibling already answering 409
+  "Archive it instead."
+
+  **The real defect was that `isArchived` was a display flag with no downstream
+  meaning** — it decided which of two list pages a row appeared on and nothing
+  else read it. A room could be archived while an open class or a live template
+  still pointed at it; a live template kept generating into it indefinitely.
+  Five doors now give it meaning, and `DELETE /api/rooms/[id]`'s unfiltered 400
+  became a 409 matching its sibling.
 - **#52 — no channel to suggest changes to public-room base properties** (enhancement).
 
 The decisions from #52's original discussion (public rooms are community
@@ -2176,7 +2263,8 @@ theirs nor the same — invisible and unrecoverable, where the looser direction
 merely reaches a 409 that already exists.
 
 **Where the two belong.** Both go in bundle 5 with **#76** and **#52**, and
-#259 in particular should not be attempted before #76: they are the same
+#259 in particular should not be attempted before #76 (**now closed**, PR
+#262, so this dependency is discharged): they are the same
 question asked from two directions — what happens to a room's history when the
 room a class points at is no longer the right one. #260 is the odd one, in that
 its mitigation already shipped: the neighbourhood search puts both variants in
@@ -3263,8 +3351,11 @@ all done.)
 (a committed toggle reports "Network error", then answers the retry with
 silence), #194 (editing a studio template's day leaves its old classes
 standing). **Every number in this list re-derived against `gh issue view` on
-2026-08-16**, after PR #246 merged. #101, #115, #119, #120, #112, #199, #212,
-**#220** and now **#113** were on this list and are legitimately closed.
+2026-08-19**, after PR #262 merged — 25 issues, one call each, across all three
+triage lists. **No rot found this round**, which is worth recording because the
+previous two rounds each found some. #101, #115, #119, #120, #112, #199, #212,
+**#220** and **#113** were on this list and are legitimately closed; the three
+that remain (#103, #193, #194) were each confirmed still OPEN.
 
 **#113 came off this list, and the way it came off is the second rot type §8
 warns about.** The re-derivation found it CLOSED/COMPLETED — for the third
@@ -3323,8 +3414,10 @@ minute before the cancel deadline is never repaired — accept it, allow a grace
 period for the *sweep only*, tighten the cadence at the window's end, or make the
 broadcast durable via an outbox; the last removes the whole class of defect and
 is the only one that is not a patch); #194 (withdraw the superseded classes, or
-leave them standing?); #76, #52 (both → #60) — **#73 was on this list and is
-closed** (PR #261 changed how a room enters the locked state and left the lock
+leave them standing?); #52 (→ #60) — **#76 was on this list and is closed**
+(PR #262 took the issue's own option 3, *archive instead of delete*; the
+`isPublic` lock and #52's admin-mediation question are untouched). **#73 was
+on this list and is closed** (PR #261 changed how a room enters the locked state and left the lock
 itself to #60). **#192 was on this list and is
 closed** (PR #204 resolved the decision by reporting both families) — removed
 2026-08-13 by the same sweep that recovered #113. **#220 was on this list and is
