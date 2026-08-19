@@ -651,7 +651,7 @@ force some of that order.
 | 2 | Template-route seams | ~~#86~~ ✓ closed; ~~#83~~ ✓ closed (PR #230); #114 remains | none |
 | 2b | ~~What #93 left behind~~ **DONE** | ~~#95 #98 #102 #99 #97 #94 #100~~ — all eight closed | — |
 | 3 | Unpinned-list cleanup & types | ~~#59~~ ~~#58~~ ~~#81+#85~~ ~~#101+#115~~ ~~#96~~ ~~#138~~ ~~#136~~ ~~#140~~ ~~#39~~ ~~#121~~ done, then #132 + #133 + #134 | one design call left (#133) |
-| 3b | Locking follow-ups | ~~#107~~ ✓, ~~#113~~ ✓ (PR #227), ~~#180~~ ✓ (PR #230); #116 + #117 + #126, #103, #104, #122, #229, #232 | one decision (#229) |
+| 3b | Locking follow-ups | ~~#107~~ ✓, ~~#113~~ ✓ (PR #227), ~~#180~~ ✓ (PR #230), ~~#103~~ ✓ (PR #264), ~~#104~~ ✓ (PR #268); #116 + #117 + #126, #122, #229, #232, #269 | one decision (#229) |
 | 4 | CI reliability & framework upkeep | ~~#185~~ ✓, ~~#41~~ ✓ (PR #188) — premise disproved; ~~#40~~ ✓ (PR #198) — nine components, not one, and its framework half closed unverified; then #127 (+#189) | none, but hard/uncertain |
 | 5 | Room lifecycle & admin (epic #60) | ~~#73~~ ✓ (PR #261) — rooms born private, sharing behind its own door; ~~#76~~ ✓ (PR #262) — `isArchived` given downstream meaning by five doors; then #52 + **#259** + **#260** | **product decision** (the lock itself stands) |
 | 6 | Feature backlog | ~~#119 + #120~~ ✓; ~~#112~~ ✓; #47, then #46 / #48 / #49 / #51 | product priority |
@@ -1519,8 +1519,13 @@ out of #95's final review, are not urgent, and are cheap.
   and the residual at the archive is written up in `docs/lock-order.md` rather
   than closed), **#181** (`acceptInvitation` 409s a valid accept), **#182** (two
   sweeps and the attendance `PUT` still decide unlocked), **#183** (queue
-  uniqueness + a write set exceeding its lock set). Updates on **#104** (its
-  four-site enumeration is stale; the split is now 5 bounded / 5 not) and
+  uniqueness + a write set exceeding its lock set). Updates on **#104** (posted
+  saying its four-site enumeration was stale and the split was 5 bounded / 5
+  not — true at that HEAD, and **both halves false by the time #104 was
+  worked**: #237 moved `withdrawWaitingEntriesForTeacher` off both lists at
+  once, restoring the enumeration to four and the split to 4/4. The comment is
+  phrased in the present tense, so it read as a live claim about the count for
+  three rounds) and
   ~~**#83**~~ (`syncTemplateInstances` is the read-then-delete its own sibling
   warns against — closed by PR #230, which put the read under the lock).
 
@@ -1591,11 +1596,77 @@ comparison is the expensive part to redo.
   cheaper: neither route checks `ClassTemplate` references at all, so deleting a
   room referenced only by an archived template 500s on a raw P2003 instead of
   returning 409.
-- **#104 — no `lock_timeout` on the four pre-existing row-lock sites**
-  (`waitlist.ts` ×3, `registrations/route.ts`). No live bug — #95's review
-  confirmed the lock sets are disjoint today. Filed as hardening, and honestly
-  the kind of thing that belongs in a code comment rather than the tracker; keep
-  it only if the booking path's unbounded wait starts to matter.
+- ~~**#104 — no `lock_timeout` on the four pre-existing row-lock sites**~~
+  **DONE** — PR #268, merged 2026-08-20. The four (`waitlist.ts` ×3,
+  `registrations/route.ts`) now take `lockClassRow`, so **every production
+  `Class` row lock goes through `db-locks.ts`** and `grep 'lockClassRow('` is
+  the whole answer. #237's exception list was **deleted, not updated** — an
+  empty list still rots.
+
+  **This entry's own premise was the thing that was wrong, and it is left
+  visible rather than struck through.** It said "No live bug — #95's review
+  confirmed the lock sets are disjoint today", and set its own trigger: *keep it
+  only if the booking path's unbounded wait starts to matter*. Both were true
+  when written and false by the time it was worked. `autoCancelClasses` locks
+  in-window open classes every 60 s, and GDPR erasures hold `Class` rows across
+  transactions budgeted at 20 s / 10 s. The trigger had fired and nothing
+  re-checked it — which is why the premise is corrected here rather than the
+  line simply crossed out, so the same "disjoint, so no bug" reasoning is not
+  available to inherit again.
+
+  Sharper still: **the lesson that predicted this sits 300 lines above it in
+  this same file** — "when adding a lock, enumerate every writer that can now
+  wait on it, not just the obvious one" (the #95 entry). The spec re-derived it
+  from scratch. The failure was not missing knowledge; it was a per-issue
+  conclusion outliving the conditions it was drawn under.
+
+  What the fix actually buys was also mis-stated: `P2028` already mapped to 503
+  and all three routes already ran through `withErrorHandler`, so this is a
+  **connection-occupancy** fix, not an error-quality one. Measured old
+  behaviour: a contended `promoteNext` failed at **7014 ms** against a 7 s hold —
+  it waited the hold out and failed afterwards, because Prisma cannot cancel a
+  statement already blocked in Postgres.
+
+  **The transferable finding is about sweeping, not locking.** The spec
+  enumerated the documentation to correct two ways — `grep '#104'` (9
+  locations) and reconciling the branch diff (5) — and called it complete. It
+  missed **six**, all describing the old shape without naming the issue, in
+  files the branch never touched. Three axes are needed: keyword, diff, and
+  **concept** — the vocabulary of the thing being removed. *When a change makes
+  a claim false, search for the claim, not for its citation.* Proximity is no
+  protection: two of the six sat inside or beside text the fixing task had just
+  edited, and one contradicted a sentence written 140 lines below it in the same
+  file. Final count: **20 locations**, and the PR review then found five more in
+  test files the sweep had excluded by construction.
+
+  Five artifacts of this branch were caught wrong by the people executing them,
+  not by their author: the spec's location count (twice), an unpredicted
+  assertion *inversion*, a `200` that was a `201`, and three dispatch sentences
+  transcribed faithfully into source — including one asserting "this branch
+  changes no behaviour" in a permanent docblock, where "this branch" has no
+  referent at all. Dispatch prose is source code.
+
+  Spun out: **#269** (a benign lock race reddens the reconciliation sweep on
+  `/api/health`; `reconcileOne` already computes the transience it needs and
+  discards it — extended with the `promoteAfterCancel` log-message branch split
+  rather than filing a second issue).
+
+  Ratio: **one closed, one opened** — a leaf, with a named fix and the
+  observation that the information it needs is already computed. Two further
+  findings deliberately did **not** become issues, which is the part worth
+  copying. The `.catch(() => -1)` that discards an error unlogged got a
+  **comment beside the code at both sites** rather than a tracker entry: it
+  matters only to someone standing at that line, and #268's own binding
+  constraint (no executable changes in a documentation wave) is why it was not
+  simply fixed. And the `promoteAfterCancel` log-message split was folded into
+  #269 as an update rather than filed alongside it, because both are the same
+  problem — `handleSpotFreed`'s failures not arriving anywhere a human can act
+  on — and they touch the same call sites.
+
+  Worth noting against the ratio: this round's PR review produced **23 findings
+  across four specialised agents**, and one issue came out of them. Most were
+  false or stale claims in prose, fixed in place. A review that finds a lot is
+  not the same as a round that should file a lot.
 
 ---
 
@@ -3539,6 +3610,16 @@ because the deadlock needs a `ClassTemplate` row to exist and the guard that
 stops the 500 is the guard that stops the `DELETE` being issued. **#193 and
 #267 are the same defect in two components** and should be read together; #267
 is the more mechanical of the pair.
+
+**Re-derived again on 2026-08-20**, after PR #268 merged — **33 numbers**
+across all three triage lists, one `gh issue view` each, checking both rot
+directions. **No rot found.** The four live bugs (#193, #194, #265, #267) are
+all genuinely open; "someone is currently worse off" is still empty; every
+closed number appearing near these lists is struck through or marked DONE, so
+none is being carried as live work. **#113 was checked specifically**, since
+this file records it being auto-closed wrongly twice: it is
+`CLOSED / COMPLETED` at 17:18Z on 2026-08-14 by PR #227, which is the
+legitimate closure this file already calls "finally closed for real".
 
 **Every number in this list re-derived against `gh issue view` on 2026-08-19**,
 after PR #264 merged — 18 issues, one call each, across all three triage lists.
