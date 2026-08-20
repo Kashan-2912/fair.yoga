@@ -1,15 +1,24 @@
 # Open-issue roadmap & bundling
 
-**Snapshot:** 2026-08-19 (after #103 merged, PR #264) · **80 open issues**,
-re-counted with `gh issue list --state open --limit 200` = 80. Reconciles:
-78 − 1 (#103, PR #264) + 2 (#266, #267, both spun out of the PR review) + 1
-(**#265, filed by the maintainer at 16:35Z, outside this round**) = 80.
-**One in, two out.**
+**Snapshot:** 2026-08-20 (after #116 + #117 + #126 merged, PR #273) ·
+**89 open issues**, re-counted with `gh issue list --state open --limit 200`
+= 89. Reconciles: 80 − 3 (#116, #117, #126 — all three in PR #273) + 1 (#272,
+spun out of the branch's own measurement) + 11 (**#274-#284, filed by the
+maintainer at 12:14-12:46Z, outside this round**) = 89. **One in, three out.**
 
-**The extra +1 is why the arithmetic is written out.** Without #265 named, the
-sum reads 79 against a measured 80 and the next round inherits a one-issue
-error as its baseline — the precise corruption §8 says the open count cannot
-reveal on its own.
+**The +11 is why the arithmetic is written out**, and it is the second
+consecutive round where the count only reconciles because an outside-the-round
+batch is named. Without #274-#284 itemised the sum reads 78 against a measured
+89, and the next round inherits an eleven-issue error as its baseline — the
+corruption §8 says the open count cannot reveal on its own, at ten times the
+previous round's size.
+
+**#274-#284 are deliberately left un-bundled.** They are a coherent batch — a
+tracking epic (#274) and ten findings on the studio class family, end to end —
+filed by the maintainer after this round's work was already merged. Bundling
+someone else's batch from its titles is exactly the triage that §8 says must be
+re-derived rather than inherited, so it is the next round's first job, not this
+one's parting guess.
 
 **What this round is actually about: a fix that made a guard untestable, and
 nobody noticed for three review passes.** Both delete routes got a pre-check
@@ -651,10 +660,11 @@ force some of that order.
 | 2 | ~~Template-route seams~~ **DONE** | ~~#86~~ ~~#83~~ (PR #230) ~~#114~~ (PR #271) — all three closed | — |
 | 2b | ~~What #93 left behind~~ **DONE** | ~~#95 #98 #102 #99 #97 #94 #100~~ — all eight closed | — |
 | 3 | Unpinned-list cleanup & types | ~~#59~~ ~~#58~~ ~~#81+#85~~ ~~#101+#115~~ ~~#96~~ ~~#138~~ ~~#136~~ ~~#140~~ ~~#39~~ ~~#121~~ done, then #132 + #133 + #134, **#270** | one design call left (#133) |
-| 3b | Locking follow-ups | ~~#107~~ ✓, ~~#113~~ ✓ (PR #227), ~~#180~~ ✓ (PR #230), ~~#103~~ ✓ (PR #264), ~~#104~~ ✓ (PR #268); #116 + #117 + #126, #122, #229, #232, #269 | one decision (#229) |
+| 3b | Locking follow-ups | ~~#107~~ ✓, ~~#113~~ ✓ (PR #227), ~~#180~~ ✓ (PR #230), ~~#103~~ ✓ (PR #264), ~~#104~~ ✓ (PR #268), ~~#116 + #117 + #126~~ ✓ (PR #273); #122, #229, #232, #269, **#272** | two decisions (#229, #272) |
 | 4 | CI reliability & framework upkeep | ~~#185~~ ✓, ~~#41~~ ✓ (PR #188) — premise disproved; ~~#40~~ ✓ (PR #198) — nine components, not one, and its framework half closed unverified; then #127 (+#189) | none, but hard/uncertain |
 | 5 | Room lifecycle & admin (epic #60) | ~~#73~~ ✓ (PR #261) — rooms born private, sharing behind its own door; ~~#76~~ ✓ (PR #262) — `isArchived` given downstream meaning by five doors; then #52 + **#259** + **#260** | **product decision** (the lock itself stands) |
 | 6 | Feature backlog | ~~#119 + #120~~ ✓; ~~#112~~ ✓; #47, then #46 / #48 / #49 / #51 | product priority |
+| 7 | **The studio class family, end to end** — un-triaged, see the header | #274 (tracking) + #275 #276 #277 #278 #279 #280 #281 #282 #283 #284 | **un-triaged**; two are decisions on their face (#279, #284) |
 | 3c | **This week's spin-outs** — see below | ~~#146 + #148~~ ✓ done together (PR #163); #145 + #157 + **#258** (together — one column failing at three layers, see #249's round), #164, #162, #154, #142, #143, #147, #158, #161 | three are decisions (#147, #164, #258) |
 
 - ~~**#170 — emails normalized only in the two tables #166 added.**~~ **DONE —
@@ -1560,41 +1570,130 @@ out of #95's final review, are not urgent, and are cheap.
   ~~**#83**~~ (`syncTemplateInstances` is the read-then-delete its own sibling
   warns against — closed by PR #230, which put the read under the lock).
 
-**Do #116, #117 and #126 as one sitting** — all three are the class family
-measured against what #118 and #125 built for the studio side, and the
-comparison is the expensive part to redo.
+~~**Do #116, #117 and #126 as one sitting**~~ **DONE — PR #273,
+rebase-merged 2026-08-20.** 23 commits. All three were the class family
+measured against what #118 and #125 built for the studio side. What the round
+taught, beyond the issues:
 
-- **#116 — `pauseOrResumeTemplate` generates without taking the claim**, so its
-  `P2002` hedge is broken. The race is live: its `update` only flips `isActive`,
-  a non-key column, so Postgres grants `FOR NO KEY UPDATE`, which does *not*
-  conflict with the `FOR KEY SHARE` a concurrent `Class` insert takes — and the
-  hedge cannot save it, because a `catch` inside an interactive transaction
-  leaves an aborted transaction that fails the next statement with `25P02`
-  rather than skipping. #118 fixed exactly this on the studio side by taking the
-  claim, so the class family is now the *less* safe of the two; the fix is the
-  same shape, and the same "a null claim after your own CAS is a logic error,
-  not a race" detail applies.
-- **#117 — the class family asserts a zero-count CAS holds no lock; sometimes it
-  does.** `"the CAS matched nothing, so it acquired none"` is false in the
-  blocked-then-EvalPlanQual-recheck interleaving — Postgres takes the lock on the
-  newest version *before* the recheck, so a rejection still leaves it held to
-  commit. Settled by experiment during #118, not by reading. No live bug (the
-  plain re-read is correct either way), but the studio side now carries the
-  corrected wording while pointing readers *at this one*, so the two families
-  currently disagree about the same mechanism. Introduced by #97's own
-  "correct the last round of comment claims" commit, which is the joke that
-  writes itself.
-- **#126 — `gdpr.ts` is the last file saying the CAS takes "the same row lock"
-  as `FOR UPDATE`.** #125 corrected that conflation at six sites across four
-  files and settled on one wording; `gdpr.ts` was deliberately left out because
-  it is the referent of none of them. The result is one file asserting the
-  opposite of six others with nothing recording that the discrepancy is known —
-  arguably worse than the uniform-but-wrong state it replaced, since a reader
-  who finds `gdpr.ts` first gets no signal. The lock relations were *measured*
-  during #125's review (an `updateMany` touching no key column is granted
-  `FOR NO KEY UPDATE`; the claim's `FOR UPDATE` is stronger; the two conflict,
-  and the conflict is what serialises them), so the correct wording already
-  exists — this is one comment, no code.
+**The premise check disproved the primary issue's headline, for the third
+consecutive round.** #116 is titled *"its P2002 hedge is broken"* and its body
+predicts a `25P02` surfacing as a 500. That mechanism was removed by #164/#192
+— `generateInstancesForTemplate` ends in a bare `ON CONFLICT DO NOTHING` and
+has no `catch` at all — so the named defect **cannot occur**. PR #191's
+comment on the same issue claimed a census of six call sites "four of which
+drop the count"; re-measured with no `head` limit, four sites, all four
+consuming. Two of three load-bearing claims stale, both corrected on the issue
+at close.
+
+**The defect that was live is the one nobody wrote down.** `pauseOrResumeTemplate`'s
+write carried no `isArchived: false` and its archived guard ran in a
+non-transactional read, so an archive committing in that window left an
+**archived template marked active carrying four publicly bookable classes**
+while the studio twin answered `archived` on the identical interleaving. The
+issue asked for the claim; the CAS is what the measurement asked for, and it is
+also the precondition that makes the claim's null-throw correct rather than a
+500.
+
+**A guard the branch reasoned into existence, that measurement then reversed.**
+The spec specified a `throw` for the CAS-miss branch's fourth state — "a second
+race stacked on the first", too exotic to answer. Review reached it three
+independent ways: a resume commits between the read and the CAS, a pause
+commits before the re-read, and two tabs get there. It surfaced as
+`{ status: 500, level: 'error' }` — the paging level — for a case where the CAS
+matched zero rows and the transaction rolled back clean, i.e. exactly what
+`busy` means everywhere else in the file, and exactly what the sibling
+`archiveOrUnarchiveTemplate` already answers without throwing. **"Residual, not
+provably unreachable" written in a comment is an invitation to go reach it, not
+a disclaimer** — and the cost of not trying was that the branch shipped a 500
+where it had a 503 sitting unused in its own union.
+
+**Two guards that could not fail, after the branch had already run eight
+mutations of its own.** The `unchanged` arm's payload — whose freshness the
+union's docblock advertises in as many words — was unasserted: swapping the
+in-transaction re-read for the stale pre-transaction snapshot passed all 53
+tests, while the route spreads that template onto the wire, so the settings
+toggle would render `isActive: true` for a paused template. And the un-archive
+test compared the resolver's output to the same constant it returns, so
+rewording the copy to the studio's noun passed every file. This is the second
+consecutive round where a reviewer applied the mutation the author had not.
+
+**The sharpest version of that pattern, worth carrying: a half-applied mutation
+confirms whatever you already believed.** `countSkipReasons`' docblock claims a
+fifth `SkipReason` "fails the build here instead of vanishing". Add the reason
+and it does error — so a reviewer stops there and confirms the claim. *Complete*
+the change the way a contributor would — handle it, add the count to
+`SkipCounts`, count it — and it compiles clean repo-wide with the new number
+vanishing at every site that re-lists the fields by hand. The guarantee covered
+the *reason* and not the *count*, and only the finished mutation could show it.
+The test is never "does something break"; it is "does the specific thing this
+claim promises to protect break".
+
+**The same fabrication happened twice, in the correction to itself.** One
+anomalous measurement (a lock probe returning after 9982ms) got a mechanism
+that was false; the commit correcting it supplied a *second* mechanism that was
+also false, disproved in review by two clients in one process measuring
+`REFUSED 55P03 after 5ms`. It is now recorded as **cause not established**.
+When the decision is already taken, the explanation is where the invention
+lands — and a ledger's job is to make that visible, which here it eventually
+did.
+
+**Two sweeps the plan prescribed and nobody ran.** Both #117's
+(`grep -rn "acquired none\|holds no lock" src/`) and #126's
+(`grep -rn "same row lock" src/`) are written into the plan with *"Expected: no
+hits"*. Run in review, both returned hits — a fourth #117 site in an API route,
+and an eighth #126 site the branch itself had passed over two commits after
+declaring seven. **A prescribed verification step that is never executed is
+worse than none**: it manufactures the belief that it was.
+
+**Agents mutating a shared working tree corrupted each other again — third
+consecutive round, and the previous two snapshots both recommended the fix.**
+One agent reported the claim-null throw firing in a test that passes 7/7 on a
+clean database, from its own aborted run's leftovers, and said so honestly.
+Another observed a third agent's in-flight mutants mid-review and flagged the
+timestamps. Two agents left probe files in `src/services/` matching the unit
+project's glob. `isolation: "worktree"` is now the third recommendation of the
+same thing; the cost this round was measurement noise rather than a false
+finding only because every agent re-checked `git diff` around its runs.
+
+- ~~**#116 — `pauseOrResumeTemplate` generates without taking the claim**~~
+  ✓ closed. Shipped: the CAS, the claim, the now-unreachable P2025 branch
+  removed, the class family's un-archive message, and door 3 marked known-open
+  with the structural decision filed as **#272**.
+- ~~**#117 — the class family asserts a zero-count CAS holds no lock**~~
+  ✓ closed. The spec said "two twins, both of which must move"; there were
+  three — the third an API route, found only by running the sweep above.
+- ~~**#126 — `gdpr.ts` is the last file saying the CAS takes "the same row
+  lock"**~~ ✓ closed. Eight sites, not seven; the eighth was corrected on this
+  branch two commits after the comment declaring itself last.
+
+- **#272 — decide how "an active template may not sit on an archived room" is
+  enforced.** **A decision, not a fix**, and spun out of PR #273's own
+  measurement rather than from reading. The invariant is currently held by
+  **five application doors, every one a non-transactional read**, and door 3
+  (`pauseOrResumeTemplate`'s room guard) was measured leaking:
+  `{"outcome":"active","roomArchived":true,"generated":4}` — four classes
+  generated into a just-archived room, which then top up indefinitely, because
+  `ACTIVE_TEMPLATE_WHERE` reads only the template's own flags and never
+  `teacherRoom.isArchived`.
+
+  PR #273 closed the template's own archive race with a CAS but deliberately
+  did **not** close this one: a CAS on `ClassTemplate` cannot carry a predicate
+  on the related room's column, and a re-read after the CAS would close the
+  measured interleaving while leaving its mirror open — a half-guard whose
+  residue needs documenting forever. `room-archive.ts` already accepts this
+  same race class from the other side rather than adding a `FOR UPDATE` node
+  that `template-lock-order.test.ts` exists to defend. The structural answer is
+  to enforce it once in Postgres, which is the call #39 made for tier ranges,
+  and that is a product-and-schema decision.
+
+  Three options on the issue, plus a fourth added after review: **instrument
+  first**. The accepted race currently ships with zero observability — the
+  teacher gets a success confirmation, students can book into an archived room,
+  and the only record it ever happened is a JSON snippet inside a source
+  comment. Accepting a race is a decision this repo has defended well;
+  accepting it *undetectably* is a different one, and it does not look like it
+  was taken deliberately.
+
 - **#122 — a teacher's studio resume can turn the hourly job red on `/api/health`.**
   New surface from #118: the resume now holds the same template row the sweep
   claims, so a teacher winning that race makes the sweep's claim time out at its
