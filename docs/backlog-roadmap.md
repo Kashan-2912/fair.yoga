@@ -648,9 +648,9 @@ force some of that order.
 | 1 | ~~Coverage campaign — the tail~~ **DONE** | ~~#71 #66 #69~~ → #67 ✓ closed | — |
 | 1b | ~~`teacher-rooms` + #77's `hasClasses` test~~ **DONE** | ~~#53 residue, #77 half~~ | — |
 | 1c | ~~`studio-*` coverage + the cron call~~ **DONE** | ~~#53~~ ✓ closed | — |
-| 2 | Template-route seams | ~~#86~~ ✓ closed; ~~#83~~ ✓ closed (PR #230); #114 remains | none |
+| 2 | ~~Template-route seams~~ **DONE** | ~~#86~~ ~~#83~~ (PR #230) ~~#114~~ (PR #271) — all three closed | — |
 | 2b | ~~What #93 left behind~~ **DONE** | ~~#95 #98 #102 #99 #97 #94 #100~~ — all eight closed | — |
-| 3 | Unpinned-list cleanup & types | ~~#59~~ ~~#58~~ ~~#81+#85~~ ~~#101+#115~~ ~~#96~~ ~~#138~~ ~~#136~~ ~~#140~~ ~~#39~~ ~~#121~~ done, then #132 + #133 + #134 | one design call left (#133) |
+| 3 | Unpinned-list cleanup & types | ~~#59~~ ~~#58~~ ~~#81+#85~~ ~~#101+#115~~ ~~#96~~ ~~#138~~ ~~#136~~ ~~#140~~ ~~#39~~ ~~#121~~ done, then #132 + #133 + #134, **#270** | one design call left (#133) |
 | 3b | Locking follow-ups | ~~#107~~ ✓, ~~#113~~ ✓ (PR #227), ~~#180~~ ✓ (PR #230), ~~#103~~ ✓ (PR #264), ~~#104~~ ✓ (PR #268); #116 + #117 + #126, #122, #229, #232, #269 | one decision (#229) |
 | 4 | CI reliability & framework upkeep | ~~#185~~ ✓, ~~#41~~ ✓ (PR #188) — premise disproved; ~~#40~~ ✓ (PR #198) — nine components, not one, and its framework half closed unverified; then #127 (+#189) | none, but hard/uncertain |
 | 5 | Room lifecycle & admin (epic #60) | ~~#73~~ ✓ (PR #261) — rooms born private, sharing behind its own door; ~~#76~~ ✓ (PR #262) — `isArchived` given downstream meaning by five doors; then #52 + **#259** + **#260** | **product decision** (the lock itself stands) |
@@ -1220,16 +1220,47 @@ together — they touch the same two files and the same mental model.
 
 ---
 
-- **#114 — the studio template family has no forbidden-field pin machinery.**
-  #79 built four compile-time pins for `ClassTemplate`; `StudioClassTemplate`
-  has none, and `PUT /api/studio-class-templates/[id]` passes `parsed.data`
-  straight into `update`. Safe only because its zod schema is `.strict()` and
-  happens not to declare the dangerous fields — real protection at the HTTP
-  boundary, none at the function boundary, and no pin to fire if someone adds
-  one later. #111 is what made this matter: it gave `StudioClassTemplate`
-  columns worth forging, closed the gap on the class family, and correctly did
-  not invent parallel machinery for the studio side. Mechanical — the class
-  family is a working template to copy.
+- ~~**#114 — the studio template family has no forbidden-field pin
+  machinery.**~~ **DONE — PR #271, 2026-08-20.** What the work taught, beyond
+  the issue:
+
+  **The premise check changed what the fix was FOR, not just whether it was
+  needed.** The issue said only `.strict()` stood between a contributor and a
+  forged `archivedAt`, and that nothing was watching. False:
+  `schemas.test.ts`'s `server-owned fields` register already walked every
+  exported schema and refused **five of the eight** forbidden columns —
+  including both columns the issue said #111 made worth forging. What the
+  register cannot do is refuse its own repair: its failure message says *"add
+  it to EXPECTED with a reason"*, which is precisely the reflexive grant a
+  forbidden pin exists to make impossible. So the work was never "add missing
+  protection"; it was "add the layer that can refuse the register's own
+  quickest fix". The issue also said "four pins" — there are six.
+
+  **A pin that consults Prisma instead of copying itself.** The class family's
+  completeness pin duplicates its forbidden union and `Exclude`s it against
+  itself, so it never reads the model and is blind to a column a migration
+  adds — by construction, not by accident. Where the two lists partition the
+  model exactly (`6 + 8 = 14`, measured), `Exclude<keyof PrismaInput, A | F>`
+  states the same invariant against the generated type and goes red on the
+  migration. It is the only pin in the repo a migration can turn red. When #111
+  added `archivedAt` and `withdrawnCount` to both models, every pin then in
+  place stayed green until a human classified them.
+
+  **The measurement that scoped the spin-out.** The obvious follow-up —
+  retrofit both class-family completeness pins — is impossible for one of its
+  two targets. `Class` has **seven** columns classified by neither list
+  (`teacherRoomId`, `templateId`, `cancelDeadline`, `autoCancelCheck`,
+  `createdAt`, `updatedAt`, `spotBroadcastAt`), so `10 + 7 = 17` against 24
+  columns. #270 is therefore scoped to `ClassTemplate` alone, with the `Class`
+  measurement recorded inside it as the reason. Filing the obvious version
+  would have handed someone a "mechanical" task that turns into a per-column
+  design decision on contact.
+
+  **Built via handover in a second harness (opencode), and it worked.** Six
+  commits, no deviations from the plan, every predicted line reference intact.
+  The handover's value was its derailer section — the two that mattered were
+  "do not read the issue as your source of truth" and "the class family is your
+  template AND contains one pin you must not copy".
 
 ## Bundle 2b — What #93 left behind
 
@@ -2389,6 +2420,65 @@ schema-plus-middleware job — so it settled the controls instead.
   got a **docblock instead of an issue**, because the failure mode is "someone
   greps `cleanup` and picks the wrong one of two", which a signpost beside the
   function fixes and a backlog entry does not.
+
+## This round's spin-outs (#114, PR #271) — one, and a review that found nineteen things, none of them behaviour
+
+**One in, one out.** #270 is the only filing, and it is a leaf: the measurement
+is done, the acceptance is exact, and its `Class` half was deliberately recorded
+inside it rather than filed, because that half needs a per-column decision and
+would have spun its own three.
+
+**The five-agent review found nineteen things and not one was a behavioural
+defect.** That is the number worth keeping. The shipped logic was correct; all
+twelve original tests were confirmed sound under mutation. What the agents found
+instead was one test-hygiene bug, one observability regression, two guards that
+could not fail, and eleven false or imprecise claims in prose. **Five findings
+were reported independently by two agents**, which is what separated them from
+opinion.
+
+**Two guards that could not fail, both found by a reviewer applying the mutation
+before the author did.** `PUT → not_found → 404` had no HTTP test: flipping it
+to 403 left all 36 studio integration tests green, and the route's `never` guard
+cannot catch that because it fires on an *unhandled* reason, never a
+*mishandled* one. And the P2025 test asserted a reason the function's early
+return produces too, so moving the fixture's delete before the read left all
+eight tests green. **The branch had already run twelve mutations.** Writing your
+own mutation list tests the failures you already imagined; that is the argument
+for adversarial review over self-review, and it cost two vacuous guards here.
+
+**A claim the branch falsified itself, three commits later.** The pin docblock
+said the runtime register "covers five of these". Task 5 of the same plan added
+the missing three, making it eight, and nobody re-derived the count — not the
+author, not the first review. §4's rule is "correct a claim in every artifact";
+this is the harder case it does not cover, where a *later task in the same
+branch* invalidates an *earlier task's* prose. Worth a habit: when a task
+changes a set, grep for prose that counts that set.
+
+**And one written while fixing a different false claim.** The new test's comment
+said the studio port was simpler because `StudioClass.template` is
+`onDelete: SetNull` and the class version has child rows to clear. `Class.template`
+is `SetNull` too. One half of a comparison was checked and the other asserted —
+inside a commit whose message was about correcting false claims.
+
+**#231 is the pattern behind the observability finding.** Catching P2025
+silently deleted an `error`-level log line, because `classifyApiError` has no
+P2025 branch and falls to its default arm. The comment defended the silence on
+reachability — an argument `api-errors.ts:112` had already tried and rejected
+one file over: *"The argument was true, and it was the wrong thing to depend
+on."* The reachability claim was even correct. It was still the wrong
+instrument.
+
+**A leaked test database, attached to #177 rather than filed.** The new describe
+shipped without the `afterAll` both siblings carry: 52 teachers, 149 templates
+and **1788 studio classes** in `ethical_yoga_test`, growing ~7 templates a run.
+#177 already tracks "test suites leak rows", so the measurement went there as an
+Update. It contributes a third leak category that issue's framing misses — not a
+missing delete, not an ordering failure, but **no teardown written at all** — and
+an answer to its question 3 it does not anticipate: leaked rows degrade
+*runtime*, not just row counts, because `generateStudioClassInstances` sweeps
+unscoped and this repo has timing-sensitive tests.
+
+---
 
 ## This round's spin-outs (#103, PR #264) — two, and a guard the fix itself made untestable
 
@@ -3570,7 +3660,10 @@ PR #93 ──closed──> #86            (archive rule)   └─ spun out ─�
        terminal class, and inert until a sweep started deleting on it.
 
 #101 ‖ #115 ── same date-boundary family, two different pages ── do together
-#114 ── reopens the #72 → #78 → #79 → #82 line for the studio family
+#114 ──closed──> PR #271  └─ spun out ──> #270
+#114 ── closed the #72 → #78 → #79 → #82 line for the studio family, and its
+       new pin shape is what #270 proposes back-porting to ClassTemplate.
+       Class itself cannot take it — 7 of its 24 columns are on neither list.
 
 #67 (umbrella) ──closed──> settings_locked ✓ , public-room lock ✓ , #71 ✓
 #53 (umbrella) ──closed──> every mutating route now has HTTP coverage
@@ -3611,7 +3704,18 @@ stops the 500 is the guard that stops the `DELETE` being issued. **#193 and
 #267 are the same defect in two components** and should be read together; #267
 is the more mechanical of the pair.
 
-**Re-derived again on 2026-08-20**, after PR #268 merged — **33 numbers**
+**Re-derived again on 2026-08-20**, after PR #271 merged — **18 numbers**
+across all three triage lists plus the epic, one `gh issue view` each, checking
+both rot directions. **No rot found** — three consecutive clean rounds. #194 was
+checked with particular care because PR #271 touches its subject and pins its
+current behaviour in a test: it is genuinely still OPEN, and that test is
+expected to be rewritten by whichever way its two product decisions go.
+
+**Open count: 80.** `80 before + 1 filed (#270) − 1 closed (#114) = 80`. Flat,
+and flat for the right reason rather than by coincidence — the round closed one
+and opened one leaf.
+
+**Re-derived on 2026-08-20**, after PR #268 merged — **33 numbers**
 across all three triage lists, one `gh issue view` each, checking both rot
 directions. **No rot found.** The four live bugs (#193, #194, #265, #267) are
 all genuinely open; "someone is currently worse off" is still empty; every
