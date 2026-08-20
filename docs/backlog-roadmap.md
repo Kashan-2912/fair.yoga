@@ -3786,8 +3786,9 @@ PR #93 ──closed──> #86            (archive rule)   └─ spun out ─�
 already exist in `notifications-stream.test.ts`). (#59, #58, #81+#85, #101, #115
 all done.)
 **Live bugs, not just cleanup:** #193 (a committed toggle reports "Network
-error", then answers the retry with silence), #194 (editing a studio template's
-day leaves its old classes standing), **#267** (`delete-room-button` reports
+error", then answers the retry with silence), ~~#194~~ **closed** (PR #285 —
+editing a template now propagates nothing and generation is keyed per week),
+**#267** (`delete-room-button` reports
 every non-JSON server error as "Network error" — `res.json()` sits inside the
 outer `try`, so an Nginx 502 or an HTML error page reads as a transport failure
 and the teacher retries forever against a deterministic server fault; the
@@ -3909,3 +3910,96 @@ scheduler), #178 (a checkout can report a false green — #225 is one of the way
 suite cannot run concurrently with itself), #143 (three teacher detail pages with
 no coverage at any level).
 **Blocked on a refactor:** none. #83's entry here ("two signature widenings") was the last, and PR #230 closed it — the widening turned out to be one widening and one *narrowing*, to `TransactionClientOnly`.
+
+---
+
+## Round: #194 — a template is a stamp, not a live link (PR #285)
+
+**Closed #194.** `syncTemplateInstances` is deleted — 250 lines of service and
+581 of tests. Editing a class template now changes nothing already generated,
+and generation is keyed per **week**: no class into a week that already holds
+one from the same template. A cancelled class **holds** its week, which is the
+one place this codebase does not read cancelled as free. A read-only probe in
+the edit endpoint predicts which week the change first takes effect and says so.
+
+**What was actually learned, as distinct from what the issue said.**
+
+The issue's own remedy was wrong in a way worth recording: it instructed
+implementers to reuse `startOfLocalWeek`, which resolves an *instant* through
+`Intl`. A `Class.date` is already a UTC-midnight calendar date, so west of UTC
+that returns the previous day — for a Monday, the previous **week**. The right
+primitive was `mondayOf`, which was sitting private in `class-list.tsx`. Week
+arithmetic here needs no timezone at all, because both operands are calendar
+dates. `class-list.tsx` was already the worked example of the distinction,
+calling `mondayOf` on the date and `startOfLocalWeek` on `now` in one function.
+
+The two questions #194 could not settle answered themselves once the rule was
+stated: *withdraw or leave standing* became **leave standing**, and *reuse or
+mirror `syncTemplateInstances`* became **neither — delete it**. The fix was
+subtractive. Four issues collapsed into one rule and ~250 fewer lines.
+
+**Every fix round on this branch was triggered by a comment, not by broken
+logic.** Seven tasks, seven rounds: evidence stored in a directory the tooling
+deletes; counts patched instead of re-derived; a parity claim exhaustive over
+the wrong axis; wiring asserted before it existed. In a repo whose review
+culture rests on comments being true, the prose is the artifact under review,
+and it decays where the compiler cannot see.
+
+**Three sweep methods failed on this branch, each blind in its own way**, and
+this is the most transferable thing in the round. A keyword grep cannot see a
+claim that omits the keyword (two live docs described the deleted propagation
+without naming it). A grep with an unquoted variable silently returns
+"(nothing)" for every term — a negative result from a broken command is
+indistinguishable from a real one. And a **line-oriented** grep cannot see a
+sentence that wraps: two sites saying "a fifth `SkipReason`" split across a line
+break, which is why one re-derive pass fixed one of three citing sites, and why
+the controller's own verification grep came back empty and nearly dismissed the
+finding. What worked was searching the *citing relationship* — "who cites this
+docblock?" — not the sentence.
+
+**The plan's Definition of Done was wrong twice.** It said a grep for the
+deleted symbol should return nothing; the real figure was 173 hits across 37
+files, which forced a three-bucket rule — correct live source, correct live
+reference docs, **never rewrite dated artifacts** (`docs/superpowers/specs/*`,
+`plans/*`, closed-issue entries). A design doc from July describing a function
+that existed in July is an accurate record, not a stale claim. It also leaned on
+`npm run verify` as the gate, and `verify` is `typecheck && lint && vitest` —
+**Playwright is not in it**. A guaranteed-red e2e spec survived a green verify
+*and* a full task review before that gap was found.
+
+**A five-specialist PR review then ran a ten-mutation sweep: eight guards
+reddened, two did not.** Both were on the probe, and together they meant its
+status-filter asymmetry — the branch's central promise — was untested in both
+directions. Two reviewers reached it independently from opposite ends. Fixed.
+
+**Open count: 94.** `78 before + 17 filed − 1 closed (#194) = 94`. The 80 in
+the previous snapshot reconciles: PR #273's round was `1 in, 3 out`, so
+`80 + 1 − 3 = 78`.
+
+**17 in, 1 out, and that needs saying out loud rather than passing as normal.**
+It is three distinct things, not one spin-out:
+
+- **10** are a deliberate *survey*, not spin-outs: an end-to-end audit of the
+  studio-class family (#274 tracker plus #275–#283), which was requested before
+  #194 was started and found the family under-explored rather than broken.
+- **1** is #284, the studio half of this rule, split out because #194 grew to
+  cover both families and a studio tracker is the wrong home for class work.
+- **6** are the PR review's findings (#286–#291). These are the ones that are
+  genuinely this round's, and they cluster: four are **type-expressiveness**
+  gaps — a bare `number` week key, an overloaded `null`, a union documented as a
+  partition that is really a first-match classification, a `SkipCounts`
+  intersection one family has and its twin does not. All four were pre-existing
+  and invisible until `SkipCounts` grew a third field and forced every consumer
+  into daylight. That is an under-explored area surfacing, and it is worth
+  saying so rather than letting `1 in, 6 out` read as sprawl.
+
+One finding was **not** filed: the route-boundary gap is already #206, which
+gained an update instead — the service side has now acquired a real invariant
+(`& SkipCounts` refused to compile until the third count was carried) that the
+route still discards.
+
+**Triage re-derived on 2026-08-20** after PR #285 merged — **32 numbers** across
+all three lists, one `gh issue view` each, both rot directions. **One rot found
+and corrected:** the "Live bugs" list carried #194, closed by this very round;
+it is now three, not four. Six of the numbers checked are PR references
+(`MERGED`), not issues, which is expected — the lists cite both.
