@@ -19,9 +19,48 @@ A free, open-source toolkit for independent yoga teachers. Not a marketplace —
 
 **Services are framework-agnostic.** Business logic in `src/services/` takes typed inputs and returns typed outputs. No HTTP concerns, no framework imports. API routes are thin wrappers. This makes services independently testable and extractable if a separate API is ever needed.
 
-**Database changes require migrations.** When modifying `prisma/schema.prisma`, always create a migration with `npx prisma migrate dev --name <description>`. Never apply schema changes with raw SQL or `db push` alone — migrations must be tracked so other environments can reproduce the change.
+**Database changes require migrations.** When modifying `prisma/schema.prisma`, always create a migration with `npx prisma migrate dev --name <description>`. Never apply schema changes with raw SQL or `db push` alone — migrations must be tracked so other environments can reproduce the change. Once applied, a migration file is immutable — comments included; see *Comment Discipline*.
 
 **Working a backlog issue?** Invoke the `solve-issue` skill (`.claude/skills/solve-issue/`) before anything else. It carries the whole arc — verify the issue's premise, brainstorm, spec, plan, subagent build, multi-agent PR review, rebase-merge, roadmap — plus the review gates and the failure modes this project keeps hitting. Written to run from an empty context, one issue per session. `.claude/skills/verify/` covers driving the running app.
+
+## Comment Discipline
+
+Comment drift cost PR #300 five review rounds. `generation.ts` and
+`template-action-messages.ts` are more prose than code, and the paragraphs that
+kept coming back wrong were the ones reaching past their own file.
+
+- **A comment annotates the code it sits on.** Anything wider — counts,
+  censuses, set membership, facts about another module — goes in `docs/` and the
+  comment links to it. A claim reaching past its file has no owner: the person
+  who invalidates it never sees it. `generation.ts`'s header docblock keeps an
+  import census of its own importers, and #296 falsified it twice in one issue,
+  both times by an edit made in another file.
+- **Never write a count or a member list in prose — name the type.** "Every
+  `SkipCounts` member" survives a fifth member; a prose roster does not.
+  `countSkipReasons`'s docblock had its member counts refreshed and its
+  call-site roster left stale, and so described a state this repo was never in.
+- **Where membership matters, tether it to the compiler.**
+  `satisfies Record<keyof T, true>` — `COUNT_KEYS`
+  (`template-action-messages.ts`), `ROOM_SEARCH_SELECT` (`api/rooms/route.ts`)
+  — or an exhaustive `switch` with a `never` default (`countSkipReasons`).
+  `COUNT_KEYS` replaced an `&&` chain whose docblock promised a fourth member's
+  check would land with it; #296 added the member, the promise did not, and the
+  predicate asserted more than it checked. An untetherable membership claim is a
+  `docs/` entry, not a comment.
+- **Comments state what is true now.** What a comment used to say belongs in git
+  and the PR body — not "this previously read X", and not `hasIntegerCounts`'s
+  paragraph reconstructing how its own wording came to be wrong. If the risk is
+  that someone reintroduces the error, add a test or a tether; if neither is
+  possible, one line stating the constraint.
+- **Prose about a migration goes in `docs/`.** A comment-only edit to an applied
+  migration changes its checksum, and `prisma migrate status` compares names — so
+  nothing catches it until the next `prisma migrate dev` demands a reset.
+  Measured on `20260821120000_cross_family_slot_guard`, which is why that note
+  sits in `docs/lock-order.md` instead.
+
+Counts are legitimate in `docs/` and in this file — that is what having an owner
+looks like — and they ship with the command that re-derives them, as
+`docs/lock-order.md` does for `FOR UPDATE OF`. In a comment, never.
 
 ## Core Business Logic
 

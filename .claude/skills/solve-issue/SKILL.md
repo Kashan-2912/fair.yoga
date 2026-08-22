@@ -98,8 +98,19 @@ Every wrong number so far came from a method that structurally could not produce
 - Conflating "9 call sites" with "9 display sites plus 1 billing site".
 
 Rules: show the arithmetic so a reader can re-derive it (`48 DateTime − 3 @db.Date = 45,
-minus the one being fixed = 44`). Prefer naming call sites over counting them. Prose that
-counts goes stale; prose that explains why does not.
+minus the one being fixed = 44`). Prose that counts goes stale; prose that explains why does
+not.
+
+**Naming the members rather than counting them is the right instinct and does not make the
+claim durable.** `docs/lock-order.md`'s cross-family paragraph did exactly that and named an
+incomplete set. A roster and a count are both prose claims about a set; only a compiler
+tether is not — see *Comment Discipline* in CLAUDE.md for the house patterns.
+
+**Decide where a number lives before you write it.** A measurement belongs in the spec, the
+PR body and `docs/`, where it has an owner and can ship with the command that re-derives it —
+not in a docblock, where the edit that invalidates it happens in another file. PR #300 spent
+five review rounds on that class of claim; `generation.ts`'s header docblock keeps an import
+census of its own importers, and #296 falsified it twice from the other end.
 
 ## 3. Prove every guard bites
 
@@ -164,6 +175,13 @@ having a way to check you reached it. Two procedures, both mechanical:
 The corollary is worth stating because it is counter-intuitive: **a fix wave's own report is
 not evidence.** It said it had corrected "the spec, the plan, and the commit message." It had
 not. Reconcile against the diff.
+
+**Correct a claim by replacing it, not by annotating it.** "This previously read X" turns one
+stale sentence into two, and the second goes stale too — `hasIntegerCounts`
+(`template-action-messages.ts`) came out of PR #300 carrying a correction of a correction. The
+before-and-after belongs in the PR body, which already asks for it; the comment carries only
+what is true now. If the worry is that someone reinstates the error, a test or a compiler
+tether holds it and a paragraph does not.
 
 ## 5. Build — handover or subagents; review at both levels
 
@@ -252,7 +270,9 @@ when a type and its invariants are the point.
 
 Give each reviewer the specific risk to chase, not a generic ask. State already-verified facts
 so they don't re-derive them — but **never** tell a reviewer what to conclude or what not to
-flag. Adjudicate false positives yourself, with evidence, in the aggregate.
+flag. For the comments reviewer that risk is already named: claims reaching past the file they
+sit in, prose counts and rosters, and correction history that belonged in the PR body.
+Adjudicate false positives yourself, with evidence, in the aggregate.
 
 Aggregate into one Critical / Important / Suggestions list. Say plainly which findings are
 your own errors.
@@ -316,7 +336,9 @@ accessible-name gap is pointed at from beside the button it describes. An issue 
 opens is worse than a comment everybody reads. A reachable defect you are not fixing
 now is the same shape: mark it `known-open` beside the code — as `room-archive.ts` does
 for the archive-versus-publish race it accepts, and as `CLAUDE.md` did for
-`template-sync` until #194 deleted that function.
+`template-sync` until #194 deleted that function. **The gap has to be about the code it sits
+beside** — one about another module has no owner there, so it goes in `docs/` and the comment
+links to it.
 
 **Watch the ratio.** Note in the roadmap how many issues a round closed and how many it
 opened. One in, one leaf out is healthy. One in, three out needs a reason stated out loud.
@@ -373,8 +395,11 @@ the arithmetic then reconciles against the corruption. #199's round recovered on
   An unquoted variable over one of these silently matches nothing.
 - **Migrations:** Prisma cannot express CHECK constraints, so hand-author them following
   `prisma/migrations/20260721061528_student_claim_link_check/`. Never edit an applied
-  migration. `prisma db execute` swallows `RAISE NOTICE` but does surface `RAISE EXCEPTION`;
-  use `psql` inside the `fairyoga-db-1` container when you need to see a success notice.
+  migration — **a comment-only edit counts**, because it changes the file's checksum while
+  `prisma migrate status` compares only names, so nothing catches it until the next
+  `prisma migrate dev` demands a reset. Prose about a migration goes in `docs/`.
+  `prisma db execute` swallows `RAISE NOTICE` but does surface `RAISE EXCEPTION`; use `psql`
+  inside the `fairyoga-db-1` container when you need to see a success notice.
 - **Never `git add -A` or `git add .`** — stage exact paths.
 - **Never write "does not close #N" in a PR body or commit message.** GitHub's auto-close
   parser matches `close #N` and does not understand the negation in front of it. PR #191's
@@ -420,10 +445,11 @@ the arithmetic then reconciles against the corruption. #199's round recovered on
 
 ## The PR body
 
-Record what was measured and where the errors were, including your own. State which inherited
-claims were checked and which held; show the arithmetic behind every number; name what the PR
-does *not* do; and say which suites ran, naming by path the `integration` files this branch
-touched.
+Record what was measured and where the errors were, including your own — and including what a
+comment used to say, where you corrected one. That record lives here, not beside the code.
+State which inherited claims were checked and which held; show the arithmetic behind every
+number; name what the PR does *not* do; and say which suites ran, naming by path the
+`integration` files this branch touched.
 
 Two mechanical traps in that paragraph, both of which have fired:
 
