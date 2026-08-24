@@ -4170,3 +4170,96 @@ answered first).
 
 **Triage re-derived 2026-08-24** (see the note above the lists): two rots,
 both decisions-list entries for issues closed elsewhere in this very file.
+
+---
+
+## Round: #297 + #298 — the two class families share a calendar identity (PR #314)
+
+**Closed #297 and #298** (rebase-merged 2026-08-24). Both were `question`
+issues, so the deliverable is a recorded decision, not a diff: **C and D
+together, both as extraction** — `CalendarEntry` and `ScheduleRule` take the
+calendar identity, the four existing tables survive holding their economics,
+and single-table-with-a-discriminator is rejected at both layers. #297's rule is
+absolute non-intersection, half-open, enforced by `EXCLUDE USING gist`. The
+decision and the first implementation plan are committed under
+`docs/superpowers/{specs,plans}/2026-08-24-*`.
+
+The release trigger #298 set for itself — the close of #283 and #276 — had
+fired, which is why this ran now.
+
+**What was learned beyond the issues.**
+
+*A decision issue's own comments rot exactly like code comments do.* Six of the
+recorded decision's claims did not survive re-derivation. Five were numbers and
+left the decision intact; the sixth changed the schema. That ratio is the useful
+part: re-deriving found the small errors and missed the large one.
+
+*The large one came from a gate question, not from the sweep.* #298's comment
+kept exact-start matching at the rule layer, reasoning that rule conflict "is
+derived from activity and date range". The maintainer asked at the spec gate
+what happens when a template later gains a date range — and the answer is that
+**no rule has one today**, so every live rule reaches every week and an
+overlapping rule pair collides every week, exactly as certainly as an
+identical-start pair. The design would have refused one certain conflict at edit
+time and admitted an equally certain one. `ScheduleRule` now takes the same
+range exclusion as `CalendarEntry`. **The sweep re-derived five numbers and
+missed the claim that mattered; one question found it.**
+
+*A correction of a correction, committed inside the document describing that
+defect.* §2.2(a) corrected an inherited claim ("`durationMinutes` participates
+in no validation anywhere" — it has 8 Zod sites) and replaced it with another
+wrong one: "nothing in this system computes when a class ends". It does, at
+`class-lifecycle.ts:550` and `class-transitions.ts:532`. The wrong-producing
+method is the record worth keeping: the reference list was read by eye and
+`settings/`- and `page.tsx`-shaped paths classified as display, which skips
+`src/services/` — the one directory where the claim could fail.
+
+*And a fix that reached one artifact and not its twin, in the same document.*
+The §2.2(f) correction that gave the rule layer an exclusion constraint reached
+§4.4 and never reached §7.1's test census, which went on counting two
+"pre-existing violating pair" cases where there are four. Knowing §4's rule is
+not the same as having a procedure that catches it.
+
+**Executing beats reading, and this round has the cleanest demonstration yet.**
+The migration plan was reviewed by *running* it against a seeded copy rather
+than reading it, and **it could not run at all**. Two fatal defects: `ScheduleRule`
+declared `withdrawnCount NOT NULL` where both children declare it `Int?` and
+every live row is NULL (11/11 and 1/1, because only an archive writes it); and
+the four #296 template triggers hold four of the nine columns the migration
+drops — `pg_depend` records 10 column dependencies from their `WHEN` clauses, so
+the drops fail until the triggers go first. Fixing the second collapsed an
+entire later task, including two `DROP INDEX` statements that would have matched
+nothing while reading like they did something.
+
+A third finding is subtler and worth naming: the plan **defended a correct
+ordering with a false reason.** `CHECK`-before-FK was justified by a window a
+concurrent writer could exploit; measured, that window does not exist inside the
+transaction the file runs in. The order is right, the hazard was fiction — the
+kind of claim that survives review because nobody can falsify it by reading.
+
+**A capability nobody asked for.** All entry-level slot indexes key on `date`,
+so a 23:30 class running 60 minutes ends at 00:30 the *next day* and can collide
+with the next morning invisibly. No per-date key could ever see it; the range
+constraint catches it for free. Measured both directions.
+
+**Scope discovered mid-plan.** The spec is three plans, not one — rule layer,
+entry layer, and a triad merge that itself splits, because `pauseOrResume` and
+`archiveOrUnarchive` are ready as soon as `ScheduleRule` exists (the studio
+service already imports `LastScheduledClass` from its twin) while `update` is
+blocked on #284: `generationState`/`firstFreeWeek` appears 9 times in the class
+service and 0 times in the studio one. Recorded as an update on #284 rather than
+filed, per §7's fourth test.
+
+**Open count: 98.** `95 (2026-08-24 snapshot) + 4 filed outside a round
+(#310 #311 #312 #313) − 2 closed (#297 #298) + 1 filed (#315) = 98`. Reconciles
+exactly. The +4 is why the previous snapshot read stale rather than corrupt.
+This round itself: **2 in, 1 out** — two decisions closed, one implementation
+issue filed carrying the two later stages in its body rather than as separate
+trackers.
+
+**Triage re-derived 2026-08-24** after this round — 33 numbers across all three
+lists, one `gh issue view` each, both rot directions. **No rot found.** The
+previous round's two decisions-list rots are confirmed corrected. One gap
+recorded rather than fixed: #297 and #298 were never on the decisions list
+despite being `question` issues, and **#284 still is not**, though this file's
+own bundle line calls it "one decision left on its face".
