@@ -664,7 +664,7 @@ force some of that order.
 | 4 | CI reliability & framework upkeep | ~~#185~~ ✓, ~~#41~~ ✓ (PR #188) — premise disproved; ~~#40~~ ✓ (PR #198) — nine components, not one, and its framework half closed unverified; then #127 (+#189) | none, but hard/uncertain |
 | 5 | Room lifecycle & admin (epic #60) | ~~#73~~ ✓ (PR #261) — rooms born private, sharing behind its own door; ~~#76~~ ✓ (PR #262) — `isArchived` given downstream meaning by five doors; then #52 + **#259** + **#260** | **product decision** (the lock itself stands) |
 | 6 | Feature backlog | ~~#119 + #120~~ ✓; ~~#112~~ ✓; #47, then #46 / #48 / #49 / #51 | product priority |
-| 7 | **The studio class family, end to end** — un-triaged, see the header | #274 (tracking) + #275 #276 #277 #278 ~~#279~~ ✓ (decision, closed) #280 ~~#281~~ ✓ ~~#283~~ ✓ (both PR #303) #282 #284, **#304** | **un-triaged**; one decision left on its face (#284) |
+| 7 | **The studio class family, end to end** — un-triaged, see the header | #274 (tracking) + #275 ~~#276~~ ✓ (PR #306) #277 #278 ~~#279~~ ✓ (decision, closed) #280 ~~#281~~ ✓ ~~#283~~ ✓ (both PR #303) ~~#282~~ ✓ (PR #308) #284, ~~#304~~ ✓ (PR #305), #309 | **un-triaged**; one decision left on its face (#284) |
 | 3c | **This week's spin-outs** — see below | ~~#146 + #148~~ ✓ done together (PR #163); #145 + #157 + **#258** (together — one column failing at three layers, see #249's round), #164, #162, #154, #142, #143, #147, #158, #161 | three are decisions (#147, #164, #258) |
 
 - ~~**#170 — emails normalized only in the two tables #166 added.**~~ **DONE —
@@ -3965,17 +3965,18 @@ the `daily-cleanup` job as the slot a second retention policy drops into, and
 **Blocked on a decision:** ~~#216~~ **answered and shipped** — `expired`, not
 `removed`, on the argument the entry predicted: `exportStudentData` publishes the
 status verbatim without the class's, so `removed` would tell an Article 15
-subject they withdrew from a queue they were closed out of. #238 is the sequel
-the same reasoning produces — a status you publish forever is data you should not
-hold forever. #213 and #214 (both filed as decisions by #196's branch 2); **#219**
+subject they withdrew from a queue they were closed out of. ~~#238~~ **closed**
+(PR #248 reaped waitlist entries a year past a terminal class — the root of the
+erasure, reconciliation and export costs it named). #213 and #214 (both filed as decisions by #196's branch 2); **#219**
 (make `readSeatCount`'s lock precondition structural — a `ClassLock` token, a
 `FOR UPDATE` in its own read, or leave it; the token's escape hatch is sized by
 #104 and empties when #104 lands); **#226** (a broadcast dropped in the final
 minute before the cancel deadline is never repaired — accept it, allow a grace
 period for the *sweep only*, tighten the cadence at the window's end, or make the
 broadcast durable via an outbox; the last removes the whole class of defect and
-is the only one that is not a patch); #194 (withdraw the superseded classes, or
-leave them standing?); **#266** (the delete door names a remedy the archive door
+is the only one that is not a patch); ~~#194~~ **closed** (PR #285 answered its
+decision: leave standing — nothing already generated changes, generation is
+week-keyed, a cancelled class holds its week); **#266** (the delete door names a remedy the archive door
 can refuse — filed *as* a decision with three options laid out, per §7's second
 test, because "make the message right" needs the two doors' contract settled
 before anyone can start); #52 (→ #60) — **#76 was on this list and is closed**
@@ -3994,6 +3995,17 @@ scheduler), #178 (a checkout can report a false green — #225 is one of the way
 suite cannot run concurrently with itself), #143 (three teacher detail pages with
 no coverage at any level).
 **Blocked on a refactor:** none. #83's entry here ("two signature widenings") was the last, and PR #230 closed it — the widening turned out to be one widening and one *narrowing*, to `TransactionClientOnly`.
+
+**Re-derived on 2026-08-24**, after PR #308 merged — **19 numbers** across all
+triage lists, one `gh issue view` each, both rot directions. **Two rots found,
+both in Blocked-on-a-decision:** #238 (closed 2026-08-17 by PR #248 — a merge
+this very file discusses two paragraphs up, which is what made the miss
+embarrassing rather than obscure) and #194 (closed 2026-08-20 by PR #285;
+struck from Live bugs that same day but left standing here). Both corrected.
+The other 17 confirmed open. This is also the first sweep since 2026-08-20:
+the rounds that closed #293, #296 (both 08-21), #304 (PR #305) and #276
+(PR #306) merged without writing round sections or sweeping, so their closures
+enter the ledger below.
 
 ---
 
@@ -4087,3 +4099,74 @@ all three lists, one `gh issue view` each, both rot directions. **One rot found
 and corrected:** the "Live bugs" list carried #194, closed by this very round;
 it is now three, not four. Six of the numbers checked are PR references
 (`MERGED`), not issues, which is expected — the lists cite both.
+
+---
+
+## Round: #282 — an empty class type shows a raw Zod string in both studio forms (PR #308)
+
+**Closed #282** (rebase-merged 2026-08-24). Both studio forms now refuse a blank
+class type client-side with the product's own copy, before any request: four
+source lines each above the location guard, one component test per form, and
+each test pins both blanks — empty *and* whitespace-only — with spy-not-called
+plus exact banner. The issue's premise held completely against measurement,
+which is rare enough to record: every claim checked pre-build survived.
+
+**What was learned beyond the issue.**
+
+The issue's "asymmetry" observation (why does one field show raw Zod when its
+neighbours get product copy?) resolved into a rule rather than a patch:
+*client checks precisely the wire-required fields that have no valid default;
+everything else arrives valid.* `classType` was the only violator. A rule is
+what let the fix stay four lines instead of becoming a validation-framework
+discussion.
+
+**The base moved mid-flight and only the prose rotted.** Issue #276 landed on
+main while this branch sat in review: same family, same schemas file, and it
+opened a third writing form. The rebase itself was clean — zero conflicts —
+but the spec's "the write surface is closed: two forms plus the shared edit
+path" claim silently became false. Clean rebases rot claims, not code; a
+rebase checklist that only looks for conflicts will miss exactly this.
+
+**A claim about what a test cannot catch went wrong twice, in two different
+ways.** My spec asserted "the banner alone would pass against a continuing
+guard" — backwards, caught by branch review. The corrected sentence said "the
+banner cannot catch a continuing guard" — also wrong, caught by the comments
+review. Both versions reasoned about a hypothetical mutant nobody had ever
+constructed; when the reviewer finally did construct it (drop the `return`),
+both assertions went red, because the pre-request `setError('')` empties the
+banner before `getByText` runs. What separates the halves is not detectability
+but diagnosability: both reds catch the mutant, but the spy's red names the
+outgoing request while the banner's red reads as a missing guard. Lesson,
+stated as process: **any "X alone cannot catch Y" sentence is a
+mutation-analysis claim and earns its place only after the mutant has been
+run**, not argued about.
+
+Two smaller failures of the same species: test baselines counted with
+`grep -c "it(\|test("` (a substring line-count that matches `submit(` too;
+10 and 4 measured by an implementer against my claimed 15 and 5), and a
+"nine client lines" roster that was never true at any point in the branch's
+life (eleven at base, thirteen after).
+
+**The tests review found the one mutant both new tests missed**, and the
+precedent for the fix was already in-repo: dropping `.trim()` from the guard
+lets `'   '` reach the wire schema's `min(1)` — raw Zod again — while `''`
+still refuses and everything stays green. Each test now resubmits with
+whitespace and re-asserts; both mutants proven dead by hand (trim dropped →
+only the whitespace act reddens). #276's edit-form test had pinned this
+boundary all along; the family knew something the spec didn't think to read.
+
+One flake consumed a gate run: first post-rebase verify went red once on a
+generator lock-race test; all three projects green in isolation with counts
+reconciling exactly (146/1875 = 1068 + 294 + 513), full rerun green. Recorded
+rather than chased — the CI flake work (#290, #293) already covers the class.
+
+**Open count: 95.** `94 (2026-08-20 snapshot) + 6 filed (#299 #301 #302 #304
+#307 #309) − 5 closed (#293 #296 #276 #304 #282) = 95`. Reconciles exactly.
+This round itself: **1 in, 1 out** — #309 filed (unify the family's
+classType copy: #276's edit form says "Class type is required." per-field
+where the other two banner without the period; found by the code review,
+filed rather than folded because unifying needs the family's style question
+answered first).
+
+**Triage re-derived 2026-08-24** (see the note above the lists): two rots,
+both decisions-list entries for issues closed elsewhere in this very file.
