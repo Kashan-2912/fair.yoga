@@ -4173,6 +4173,100 @@ both decisions-list entries for issues closed elsewhere in this very file.
 
 ---
 
+## Round: #315 — ScheduleRule, and the slot becomes a range (PR #326)
+
+**Closed #315** (rebase-merged 2026-08-25). Stage A of the #297/#298 decision:
+`ScheduleRule` owns the calendar identity both template families share, the two
+children keep their economics and hang off a composite FK, and two exact-start
+partial unique indexes plus four cross-family triggers become one
+`EXCLUDE USING gist` range constraint. The four entry-level triggers survive.
+
+**The issue's premises held. The plan's did not.** All four measured claims in
+#315's body were re-derived and held exactly — both overlap pre-flights at zero,
+`withdrawnCount` NULL on 11/11 and 1/1, `pg_depend` at 10. That is worth saying
+because it is the first issue this process has verified where nothing in the
+premise was wrong. **Twenty-six claims in the plan, the task briefs and the
+dispatch instructions were falsified instead.** Three were mine, all the same
+shape: I stated the current contents of a file I had not re-read at the moment
+of writing.
+
+**The methodological result, and the most transferable thing here: sweep for
+what you invalidated, not for what you edited.** Ten times a sweep found more
+than its enumeration named — 3 prose counts became 8, 1 stale `known-open`
+became 3, 7 stale references became 8, 18 accounted deletions became 22. Every
+early sweep was keyed on the code that changed; the stale claims were about the
+objects that went. The one correctly-derived sweep found *more* than the review
+that prompted it, not less.
+
+**A keyword sweep finds stale names. It cannot find a stale description.** The
+review's one Critical was a docblock whose sentence three said `23P01` and whose
+sentence seven still called the same thing "the template's own slot index" — in
+a paragraph this branch itself had edited. It survived nine keyword sweeps
+because it names no object; it only describes one wrongly. The same shape then
+turned up in a **runtime log string** ("lost a lock race … or the slot index"),
+a category nobody had swept and the only one that reaches an operator.
+
+**The fix for one defect created the conditions to see a second.** Splitting the
+table split a lock that had been doing three jobs while one row held all the
+state — the sentence that made it click is that `updateClassTemplate` *takes no
+explicit lock at all*, because its plain `UPDATE` locked the row for free, and
+after the split that free lock covered the wrong table. Adding six explicit
+child locks made the sweep correctly block — and then generate anyway, because
+`FOR UPDATE OF ct` locks only `ct`, so a waiting statement's joined predicate
+had already been evaluated against the pre-wait snapshot and `EvalPlanQual`
+never re-fetches a non-locked join member. Measured in isolation from Prisma,
+6/6 runs.
+
+**Two predictions that did not reproduce.** The plan predicted a `Teacher`
+hard-delete would now be refused by `TeacherRoom`'s RESTRICT; measured, it
+succeeds cleanly, because PostgreSQL defers a NOT DEFERRABLE FK check to the end
+of the enclosing statement and the sibling cascade clears the blocking row
+first. And Task 5's brief asserted the ported coverage "now lives" in the
+rule-layer file; for 6 of 14 cases it did not, because every case there used
+`CREATE` and all six being ported were `UPDATE`-path. Trusting that sentence
+would have shipped the constraint's update path unpinned under a task titled
+"prove the constraint is the sole enforcement."
+
+**A generated column is the first thing this repo has put in the database that
+`schema.prisma` cannot describe.** Partial indexes, CHECKs and extensions are
+all invisible to `migrate diff` because none of them is a column. `slot` is one,
+so bare `prisma migrate dev` offers `DROP COLUMN "slot"` — which cascade-drops
+the exclusion constraint. `Unsupported("int4range")? @default(dbgenerated())`
+diffs clean while staying out of the generated client.
+
+**An environment fault invalidated 97 test results for most of the branch's
+life.** The dev server on :3000 was 1d16h old, predating the schema change;
+`next dev` hot-reloads route files but never reloads
+`node_modules/@prisma/client`, and the client is a `globalThis` singleton. The
+tell was `account-api` failing — a suite with no connection to templates. Also
+worth knowing: `npm test` joins its two invocations with `&&`, so the
+integration project is unreachable while any unit test fails.
+
+**Reviews found eleven things after the branch was "done"** — one Critical, four
+Important, five Suggestions, plus one the fix wave found itself. None was a
+functional defect. The ownership gate, the six write paths, the raw SQL, the
+migrations and the entry/rule boundary all came back clean under independent
+verification, and no invariant that had coverage at `main` lacks it now (mapped
+independently, twice).
+
+**Open count: 102.** `98 (2026-08-24 snapshot) + 7 filed outside a round
+(#317 #318 #319 #320 #321 #323 #325) − 3 closed (#315 this round, #321, and
+#309 whose closure the snapshot predated) = 102`. Reconciles exactly. This
+round: **1 in, 0 out** — everything found was fixable in-branch, and #301 was
+*extended* rather than filed beside, with the half it lacked (both hourly sweeps
+carry the same `YG001` gap, at operator-signal severity rather than a
+user-facing 500).
+
+**Triage re-derived 2026-08-25** — 33 numbers, one `gh issue view` each, both rot
+directions. **No rot found.** The open-count arithmetic was initially off by one,
+which is the signal §8 exists for; hunting it found #309, a legitimate closure
+the previous snapshot predated, not a corruption.
+
+**Stages B and C remain**, unchanged from #315's body: the entry layer
+(`CalendarEntry`, `ClassStatus` to four members, the entry-level exclusion, the
+remaining four triggers), and the triad merge whose `update` half is still
+blocked on #284.
+
 ## Round: #297 + #298 — the two class families share a calendar identity (PR #314)
 
 **Closed #297 and #298** (rebase-merged 2026-08-24). Both were `question`
