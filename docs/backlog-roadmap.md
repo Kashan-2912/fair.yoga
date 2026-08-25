@@ -4249,13 +4249,42 @@ migrations and the entry/rule boundary all came back clean under independent
 verification, and no invariant that had coverage at `main` lacks it now (mapped
 independently, twice).
 
-**Open count: 102.** `98 (2026-08-24 snapshot) + 7 filed outside a round
+**Open count: 103.** `98 (2026-08-24 snapshot) + 7 filed outside a round
 (#317 #318 #319 #320 #321 #323 #325) − 3 closed (#315 this round, #321, and
-#309 whose closure the snapshot predated) = 102`. Reconciles exactly. This
-round: **1 in, 0 out** — everything found was fixable in-branch, and #301 was
-*extended* rather than filed beside, with the half it lacked (both hourly sweeps
-carry the same `YG001` gap, at operator-signal severity rather than a
-user-facing 500).
+#309 whose closure the snapshot predated) + 1 filed by this round (#327) = 103`.
+Reconciles exactly. This round: **1 in, 1 out.**
+
+**The out was a correction, and the reason is worth keeping.** This entry first
+recorded 1 in, 0 out — everything found had been fixable in-branch. Then the
+maintainer asked whether #315 should have stayed open for stages B and C.
+Checked: nothing open tracked the entry layer, and **#284 — which stage C2 is
+blocked on — had zero mentions of #298, `ScheduleRule` or the triad**, so
+whoever picked it up would not have learned a merge was waiting on their
+decision.
+
+Closing #315 was right; its title, scope and acceptance were stage A, and stage
+A shipped. What was wrong was closing it *without replacing the pointer*. #315's
+own text said these were "stages of this decision, not separate work items —
+split them out if and when someone starts them", and that quietly assumes
+someone will find them, which after closure means opening a closed issue they
+have no reason to open. The precedent was already there and was missed: when
+#297 and #298 closed as decisions, that round **filed** #315 rather than leaving
+stage A in the spec.
+
+So stage B is now **#327**, carrying the hazards already measured rather than
+leaving them to be re-derived — the 14-predicate liveness audit and which two of
+them change meaning silently, `class-lifecycle.ts:550` as a lock-order question,
+the midnight-spill capability the range constraint gets free, and the four
+things stage A learned that stage B will hit again. **#301 and #284 were
+*extended* rather than filed beside**: #301 with the half it lacked (both hourly
+sweeps carry the same `YG001` gap, at operator-signal severity rather than a
+user-facing 500), #284 with the fact that the `update` triad merge waits on its
+rule 4.
+
+**A ratio of 1-in-0-out should have prompted the question the maintainer
+asked.** A round that closes a staged issue and files nothing has either
+genuinely finished the arc or dropped the rest of it, and this file's own
+discipline is to say which out loud.
 
 **Triage re-derived 2026-08-25** — 33 numbers, one `gh issue view` each, both rot
 directions. **No rot found.** The open-count arithmetic was initially off by one,
