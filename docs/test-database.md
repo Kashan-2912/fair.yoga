@@ -111,6 +111,29 @@ them, `integration` included, which needs the app up on `:3000` — use
 The dangerous tests — everything that calls a service sweep with an injected
 clock — are the `unit-sweeps` roster.
 
+**`npm test` is two invocations joined by `&&`, so a red first half means the
+second half never runs at all.**
+
+```
+vitest run --project unit --project components && vitest run --project unit-sweeps --project integration
+```
+
+A single failing `unit` test therefore produces a run in which `integration`
+reports nothing — not zero failures, *nothing*. The output looks like a
+one-line failure and is silently missing 519 tests. Measured on #315, where it
+masked the integration project for most of a branch's life; the branch had 63
+real integration failures nobody could see, because 16 unit tests were red.
+
+Two consequences worth stating separately, because they are easy to conflate:
+
+- **A green `npm run verify` genuinely is the whole suite.** The `&&` cannot
+  produce a false green — if the second invocation did not run, the exit code
+  is non-zero. So "green verify ⇒ every project ran" holds.
+- **A red one tells you nothing about the projects after the failure.** Do not
+  read a red `verify` as "integration passed" or as a count of what is broken.
+  Run `npx vitest run --project integration` directly to see that tier while
+  anything earlier is failing.
+
 ### 3.2 URL convention
 
 - `.env` gains `DATABASE_URL_TEST` (same Postgres server, database

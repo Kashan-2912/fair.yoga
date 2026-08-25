@@ -183,6 +183,28 @@ before-and-after belongs in the PR body, which already asks for it; the comment 
 what is true now. If the worry is that someone reinstates the error, a test or a compiler
 tether holds it and a paragraph does not.
 
+**Sweep for what you INVALIDATED, not for what you edited.** #315 hit this ten times in one
+branch. Every early sweep was keyed on the code that changed — the functions rewritten, the
+reasons renamed — and every stale claim was about the objects that *went*: two dropped index
+names, four dropped triggers, `P2002` as an error that no longer arrives. A sweep derived from
+the changed call sites found seven stale references; re-derived from the removed objects, the
+same sweep found an eighth nobody had named. The rule is mechanical: after a change that
+deletes a database object, a type, an error code or a function, list what you removed and grep
+for *those* names. Expect legitimate survivors — on #315 the entry layer genuinely still raised
+`YG001` and `unique-conflict.ts` genuinely still gated on `P2002` — so give every hit a verdict
+rather than a blanket rewrite. Rewriting a still-true claim is the mirror-image defect and
+costs more than the staleness did.
+
+**And the corollary that keyword sweeps cannot reach: a grep finds a stale NAME, never a stale
+DESCRIPTION.** #315's one Critical review finding was a docblock whose third sentence had been
+correctly rewritten to "a `23P01`" and whose seventh still called the same thing "the
+template's own slot index" — in a paragraph that branch had itself edited. It survived nine
+keyword sweeps because it names no object; it only describes one wrongly. Then the identical
+shape turned up in a **runtime log string** ("lost a lock race … or the slot index"), a
+category nobody had swept and the only one that reaches an operator's `grep`. Where a change
+alters what something *is* rather than what it is *called*, the sweep is reading whole
+docblocks in the touched functions, and there is no shortcut.
+
 ## 5. Build — handover or subagents; review at both levels
 
 ### Ask before you build
@@ -461,11 +483,20 @@ Two mechanical traps in that paragraph, both of which have fired:
   or the explanation fires the trap.** That has happened once already, five minutes after a
   reopen, in the commit written to document it.
 - **"`integration` is never run in full" is no longer true, and repeating it understates the
-  evidence.** `npm run verify` runs every vitest project (`vitest.config.ts`), so a green `verify` *is* the
-  whole integration suite. Say so, with the arithmetic that proves it — on #191 that was
-  `105 = 46 unit + 32 components + 27 integration`, which turns "every integration file ran"
-  from a reassurance into a checkable claim. Still name the touched files by path, so a
+  evidence.** `npm run verify` runs every vitest project (`vitest.config.ts`), so a **green**
+  `verify` *is* the whole integration suite. Say so, with the arithmetic that proves it — on #191
+  that was `105 = 46 unit + 32 components + 27 integration`, which turns "every integration file
+  ran" from a reassurance into a checkable claim. Still name the touched files by path, so a
   reviewer knows where to look.
+
+  **The word "green" is load-bearing there.** `npm test` is two invocations joined by `&&`
+  (`unit`+`components`, then `unit-sweeps`+`integration`), so a single red unit test means the
+  second invocation never runs and `integration` reports *nothing* — not zero failures, no line
+  at all. The `&&` cannot fake a green, so the claim holds in that direction; it says nothing in
+  the other. On #315 that masked 519 integration tests for most of a branch, and the 63 real
+  failures hiding behind 16 red unit tests only appeared once the unit tier went green. While
+  anything earlier is failing, invoke `npx vitest run --project integration` directly rather than
+  reading a red `verify` as evidence about that tier.
 
 That honesty is load-bearing rather than decorative: on #39 a wrong assertion count would have
 shipped in the PR body if the whole-branch review had not measured it independently.
