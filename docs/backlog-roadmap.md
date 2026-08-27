@@ -4385,6 +4385,126 @@ change: `test-integration-e2e` and `npx playwright test` already gated at the
 base (`9e7fae0c`) and gated every push on this branch. Re-derive with
 `git diff --shortstat 9e7fae0c a6eaed54 -- .github/workflows/ci.yml`.
 
+## Round: #331 + #228 — a plain INSERT against an exclusion constraint can deadlock (PR #334)
+
+**Closed #331 and #228** (rebase-merged 2026-08-27 as 15 commits, head
+`8d876079`). Four create paths stop deadlocking; the two template creates gain a
+service, a bounded wait and a named outcome. 25 files, +1689/−950.
+
+**This round exists because the previous one shipped a `40P01` labelled "known
+flake".** `cdb3714a` recorded it in its own commit message — *"studio-api
+answered 503 instead of 409 on a retry-safe create under full-suite lock
+contention — twice, on two different cases, each clean 3/3 in isolation and clean
+on the next full run"* — and that claim, which carried no command, was falsified
+within a day: it went red twice consecutively on `main`, on a docs-only commit
+that changed one markdown file.
+
+### The finding: an exclusion constraint does not wait the way a unique index does
+
+A b-tree unique check runs **before** the waiter's own entry exists, so the wait
+is one-directional and no cycle is constructible. An exclusion check runs
+**after** the waiter's tuple is inserted, so both sides hold something the
+other's check will find. That is a cycle, and `deadlock_timeout` (1s) breaks it
+with `40P01` — before `LOCK_TIMEOUT_SQL`'s 2s could bound it.
+
+Underneath that: **equality is transitive, so two distinct keys cannot each
+conflict with the other. Overlap is not.** #298/#327 moved the slot key from
+equality to overlap — which is exactly the capability those issues wanted, since
+it catches `19:00 +90` against `19:30 +60` — and the deadlock is the other side
+of that same coin. Not a defect in the extraction; an unpriced cost of it.
+
+`ON CONFLICT DO NOTHING` uses speculative insertion, which **withdraws** the
+tuple while waiting, restoring the asymmetry on the same constraint. The
+deadlock-free path was already in Postgres; nothing needed inventing.
+
+Measured three ways on a throwaway database, three statements each in fixed
+order — orderings, not races: plain `INSERT` deadlocks every run; the unique
+equivalent cannot be made symmetric at all; `ON CONFLICT DO NOTHING` waits, then
+returns `INSERT 0 0` with the constraint upheld.
+
+### `docs/lock-order.md` said the mechanism was unchanged, and that is why it shipped
+
+The document asserted *"An exclusion constraint waits the same way a unique index
+does."* One sentence, in the one document whose job is to be right about this,
+turning a reproducible deadlock into a shrug. It names no object and only
+describes one wrongly — the shape a keyword sweep structurally cannot find.
+Corrected by replacement in this round.
+
+### The acceptance signal is the deadlock counter, not the test
+
+`pg_stat_database.deadlocks` on the test database: **633 before, 633 after —
+delta zero** across four consecutive full integration runs. Re-derive with
+`docker exec fairyoga-db-1 psql -U yoga -d ethical_yoga_test -c "SELECT deadlocks FROM pg_stat_database WHERE datname='ethical_yoga_test'"`.
+A green test says the loser answered 409 *this time*; the counter says the
+deadlock never happened. The distinction is the whole reason this was mislabelled
+once already.
+
+### Five claims of mine were falsified, and the pattern is the point
+
+That the loser exceeded the 2s bound (no — `deadlock_timeout` is 1s and fires
+first). That the deadlock is inherent to `EXCLUDE` constraints (no — to a *plain
+INSERT* against one). That a mutation yields a generic 500 (no — a code-less
+503). That three statements wait (four). That the counter read 625 (633, two
+hours stale). **Every one was prose reasoning about code instead of reading it,
+and every one was caught by a "verify before writing" step.** The claims that
+shipped with a command attached survived four implementers and eleven review
+seats.
+
+**The lock arithmetic was wrong twice before it was right.** #228 recorded `N =
+2`; this round's first correction said three; the answer is **four**, because
+generation is two lock-taking writes, not one. `4 × 2s = 8s` inside a 10s budget
+— 2s of headroom, and a fifth waiting statement consumes it entirely.
+
+### Two defect shapes worth naming
+
+**Annotation instead of replacement cost two fix rounds.** A correction written
+*beside* a wrong claim rather than over it produced a paragraph asserting "zero
+now" and, two sentences later, that the set was non-empty. CLAUDE.md bans the
+pattern because it manufactures a contradiction, not merely because it leaves
+one.
+
+**Right per task, wrong for the branch.** Task 1 corrected a docblock; Task 2
+mirrored the *code* and not the *correction*, so `rule-slot-holder.ts` named one
+exception where there were two and `entry-conflict.ts`'s twin never got the
+parallel fix at all. No task reviewer could see either, and the invalidation
+sweep's greps could not reach those files. The whole-branch review is what
+caught them — and its sharpest finding was that both entry routes had **deleted
+the argument that makes a zero-row skip mean a slot conflict**, which was
+decoration under the old catch (it matched by constraint name) and load-bearing
+under `ON CONFLICT DO NOTHING` (which carries no conflict target).
+
+### Two out, both attached rather than filed
+
+**#301's premise is falsified.** It describes a pause/resume cross-family race as
+a bare 500 *because the generator raises `YG001`*. Nothing has raised `YG001`
+since #327, and this round deleted the last matcher. The gap survives under
+`23P01` on `CalendarEntry_teacher_slot_excl`, for which `classifyApiError` has no
+arm — recorded as an update on 301, per §7's fourth test, rather than filed
+beside it. **#228** likewise carries the note that the two entry routes share its
+unbounded shape and are outside its scope, and that nothing pins either `busy`
+arm's content.
+
+`src/lib/cross-family-conflict.ts` and its two test files went at zero callers.
+That deletion was flagged as "a decision someone should make on purpose" at the
+start of the day; it needed the caller count to reach zero, not more deliberation.
+
+**Open count: 104.** `104 (2026-08-27 snapshot) + 2 filed (#331 #332) − 2 closed
+(#331 #228) = 104`. Reconciles exactly, measured with
+`gh issue list --state open --limit 200`. This round itself: **2 in, 0 out** —
+both issues closed, nothing filed, two existing issues extended instead.
+
+**Triage re-derived 2026-08-27** — **54 numbers**, one `gh issue view` each, both
+rot directions: 23 carried as open work, all `OPEN`; 31 carried as done, all
+`CLOSED / COMPLETED`. **No rot found** — three consecutive clean rounds since the
+pair of decision-list rots on 08-24.
+
+One paging hazard worth recording, because it nearly hid a closure. `gh issue
+list --state all --limit 40` sorts by creation, so #228 — closed this round but
+filed long before — did not appear in a listing of "everything touched today" at
+all. The count is measured at `--limit 200` and each closure verified
+individually for exactly this reason; a listing that silently pages is not a
+census.
+
 ## Round: #297 + #298 — the two class families share a calendar identity (PR #314)
 
 **Closed #297 and #298** (rebase-merged 2026-08-24). Both were `question`
