@@ -3969,8 +3969,9 @@ subject they withdrew from a queue they were closed out of. ~~#238~~ **closed**
 (PR #248 reaped waitlist entries a year past a terminal class — the root of the
 erasure, reconciliation and export costs it named). #213 and #214 (both filed as decisions by #196's branch 2); **#219**
 (make `readSeatCount`'s lock precondition structural — a `ClassLock` token, a
-`FOR UPDATE` in its own read, or leave it; the token's escape hatch is sized by
-#104 and empties when #104 lands); **#226** (a broadcast dropped in the final
+`FOR UPDATE` in its own read, or leave it; the token's escape hatch was sized by
+#104, which has since closed — so the hatch is already at whatever size that
+left it, and re-measuring it is part of answering this); **#226** (a broadcast dropped in the final
 minute before the cancel deadline is never repaired — accept it, allow a grace
 period for the *sweep only*, tighten the cadence at the window's end, or make the
 broadcast durable via an outbox; the last removes the whole class of defect and
@@ -4504,6 +4505,107 @@ filed long before — did not appear in a listing of "everything touched today" 
 all. The count is measured at `--limit 200` and each closure verified
 individually for exactly this reason; a listing that silently pages is not a
 census.
+
+## Round: #332 — the archive becomes one implementation, and the pause half gets a trigger (PR #335)
+
+**Closed #332** (rebase-merged 2026-08-27 as 19 commits, head `035d3322`). Stage
+C1 of the #297/#298 decision: both families' `archiveOrUnarchive` now run on one
+generic `archiveOrUnarchiveRule` over a `TemplateFamily` descriptor in
+`src/services/rule-lifecycle.ts`, and the two old functions are one-line wrappers.
+
+**The issue's own headline claim was the one that did not survive.** #332 said the
+four functions had "identical docblocks" and shipped commands to re-derive its
+other counts. Measured: **534 lines of code under 1322 lines of comment** across
+the four — not identical, four *divergent* copies cross-referencing each other.
+That inverted the difficulty estimate. The code merge was the small half; a whole
+task went to the prose, and the prose is where every interesting failure was.
+All four line numbers the issue cited had also drifted, moved by PR #334 the same
+day. Re-derive the ratio per function with
+`sed -n 'A,Bp' <file> | grep -vE '^[[:space:]]*(//|\*|/\*)' | grep -cvE '^[[:space:]]*$'`.
+
+**One measurement scoped the entire round.** The two *archive* result unions have
+identical seven-arm sets; the two *pause* unions differ by exactly one arm
+(`room_archived`, class only). Every archive difference lives inside the
+transaction body; the pause difference reaches the public type. Archive merged on
+that basis and pause did not — so the round is C1's archive half, with the pause
+half filed as **#336** carrying a trigger that is a re-check rather than an
+argument: a `diff` over the two unions' reason sets, empty when it is due, today
+emitting exactly `reason: 'room_archived'`. #272 landing is what fires it.
+
+**A defect found by verifying the premise, not by building.** The studio
+`pauseOrResume` residual threw — a 500 at `error`, the paging level — where the
+class family answered `busy` (503). `aed305f8` fixed the class side for #116 and
+the port never happened, while the class comment claimed the two families agreed.
+The spec's evidence for it was *also* wrong and was corrected mid-build: it said
+neither branch had a test, on a grep over **log-message strings**, which a
+result-asserting test never contains. That method could not have found what it
+claimed to have counted — §2's failure in its purest form, committed by this
+round's own spec.
+
+**Three type decisions were settled by compiling, not by reasoning**, and two of
+them were plan defects caught before any code was written. A two-parameter
+`TemplateFamily<TChild, TState>` does not compile — `TState` sat in a return and a
+parameter position at once, making the hook invariant and un-unionable. That was
+the *identical* variance failure the plan had already measured for `TChild` and
+then reintroduced one parameter later. `Record<ClassFamily, unknown>` compiles and
+is **blind** to a half-defined family (`{ regular: CLASS_FAMILY, studio: 42 }`
+passes); the named-union form catches it. And the plan's four `as unknown as
+TChild` casts were avoidable — a third candidate needs no cast and no extra field.
+
+**The sharpest find on the branch was a deleted correction.** `rule-lifecycle.ts`
+claimed its transaction budget covers "the delete, the notifications, the record
+write" — true with one caller, false the moment the studio family joined with
+`withdraw: null`. The studio body the branch *deleted* had carried exactly that
+correction. No grep over changed code can reach that: the invalidated object was a
+paragraph that no longer exists. §4's "sweep for what you invalidated" has a
+second mode nobody had named.
+
+**And a verification command had gone stale.** `db-locks.ts` carries a grep whose
+stated claim is "expect FOUR hits, every one in THIS FILE — a hit anywhere else is
+a site that took one of these row locks without going through either helper." It
+returned **five**: the shared archive splices its table name from
+`family.childTable`, so the filter's literal `"ClassTemplate"` stopped matching and
+a *template*-row lock read as a `Class` one. Not a stale name and not a stale
+description — an **executable** claim that silently began returning a wrong answer.
+A new category for the hazard list.
+
+**A correction landing in one twin and not the other happened three times**, and
+the third is the instructive one: fixing one copy of a shared comment left the file
+**self-contradictory**, which is worse than consistent error, because a reader now
+finds two answers and no way to tell which is current.
+
+**The multi-agent PR review earned its seat, and its best finding was subtractive.**
+Five reviewers; the type reviewer proposed removing a hook's return value, which
+*dissolved* two coverage gaps the test reviewer had found rather than filling them —
+both confirmed by running the mutations it predicted would stay green (they did,
+5/5 and 112/112). A mutation you cannot write beats a mutation you catch. The
+silent-failure hunter found the round's one user-reachable defect: the archive's
+CAS-miss branch answered `unchanged` unconditionally, so a teacher clicked Archive
+and got no message, no error, an unchanged button, and a template still live and
+still generating — with no server log at all. Fixed to `log.warn` + `busy` (503),
+no wire change.
+
+**Ratio: 1 in, 2 out — and the reason is not discovery.** #336 is a *mandatory
+pointer*, not a spin-out: #332 exists precisely because closing #327 left stage C
+without one, which was itself the second occurrence, and closing #332 without
+filing C1b would have made it the third. Only **#337** is a genuine spin-out (two
+"sole importer" comments measured at 8 and 6 importers — false premises whose
+safety conclusion is true, filed as a decision because the durable fix is a tether,
+not a number).
+
+**Open count: 105.** `104 (2026-08-27 snapshot) − 1 closed (#332) + 2 filed (#336
+#337) = 105`. Reconciles exactly, measured with
+`gh issue list --state open --limit 200 --json number -q 'length'`.
+
+**Triage lists re-derived, and this round found rot after three clean ones.** Every
+number named as live work in "Live bugs" (#193 #267 #265), "Blocked on a decision"
+(#213 #214 #219 #226 #266 #52) and "Test-seam debt" (#225 #178 #177 #143) verified
+`OPEN` with one `gh issue view` each; "Someone is currently worse off" is still
+empty. **The rot was inside an entry rather than in the list's own bookkeeping:**
+#219's text reads "the token's escape hatch is sized by #104 and empties when #104
+lands", and **#104 is CLOSED**. #219 is correctly open; a reader is simply told
+something is pending that already landed. The open *count* reconciles either way,
+which is why only the per-issue pass reaches it.
 
 ## Round: #297 + #298 — the two class families share a calendar identity (PR #314)
 
