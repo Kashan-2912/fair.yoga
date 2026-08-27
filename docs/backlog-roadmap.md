@@ -4291,10 +4291,97 @@ directions. **No rot found.** The open-count arithmetic was initially off by one
 which is the signal §8 exists for; hunting it found #309, a legitimate closure
 the previous snapshot predated, not a corruption.
 
-**Stages B and C remain**, unchanged from #315's body: the entry layer
-(`CalendarEntry`, `ClassStatus` to four members, the entry-level exclusion, the
-remaining four triggers), and the triad merge whose `update` half is still
-blocked on #284.
+**~~Stages B and C remain~~ — stage B shipped as #327** (PR #330, the round
+below): the entry layer, `ClassStatus` down to four members, the entry-level
+exclusion and the last four triggers all landed 2026-08-27. **Stage C
+remains** — the triad merge whose `update` half is still blocked on #284.
+
+## Round: #327 — the entry layer takes the calendar identity, and cancellation stops being a status (PR #330)
+
+**Closed #327** (rebase-merged 2026-08-27 as 32 commits, head `a6eaed54`).
+Stage B of the #297/#298 decision: `CalendarEntry` holds the calendar identity
+both entry families share, `Class` and `StudioClass` hang off it by the
+composite `(calendarEntryId, kind)` and keep only their own economics, and
+liveness gets one spelling — `CalendarEntry.cancelledAt` — for both families.
+**Cancellation is no longer a status**; a cancelled class keeps whatever
+`ClassStatus` it held. The four entry-level cross-family triggers became one
+`EXCLUDE USING gist`, `CalendarEntry_teacher_slot_excl`, the way the four
+template-level ones did in #315.
+
+171 files, +14,170/−5,672, 6 migrations, 165 → 171 test files in the tree. The
+round's own runs reported 158 suite files / 1,973 tests against a 152 / 1,898
+baseline — the same +6 files by a different denominator. Re-derive the first
+two with `git diff --shortstat 9e7fae0c a6eaed54` and
+`git ls-tree -r --name-only a6eaed54 | grep -cE '\.(test|spec)\.(ts|tsx)$'`.
+
+**The finding this round is actually about: a claim that ships its own
+re-derivation command survives, and one that does not, rots.** Sixteen claims
+on this branch shipped the command that re-derives them, and all sixteen were
+still true when a reviewer ran it. Seven counts shipped wrong — four of them
+mine — and **not one of the seven had a command attached**. That is a measured
+result on one branch rather than a style preference, and it is why CLAUDE.md's
+Comment Discipline now says counts "ship with the command that re-derives
+them" (`CLAUDE.md:62`).
+
+**The refinement, found the same round: check the command against itself.** A
+shipped `grep` can be falsified by the comment containing it — the needle
+matches its own docblock and the count comes back one too high. A command that
+cannot tell its own text from its subject is not a re-derivation.
+
+**Neither figure above is re-derivable from the tree, and saying so is the
+point.** 16 and 7 are counts over this round's review passes, not over any
+file; nothing in the repo will falsify them if they drift. They are recorded
+here — with an owner and a date — rather than in a comment, which is the whole
+distinction Comment Discipline draws.
+
+**Two out, not one, and §8's sweep is what found the second.** #328 —
+`CalendarEntry -> ScheduleRule` is the one non-composite edge among the five
+into the shared-identity tables, so a `kind: 'regular'` entry can point at a
+`kind: 'studio'` rule and nothing objects. #329 — the CI schema/migration
+drift check enforces a wider invariant than its comment states (*everything
+Prisma can model must be declarable in `schema.prisma`*), a consequence of
+`migrate diff` being the comparison rather than a decision anybody made.
+**#329 reads as a standalone maintainer note and is not one:** its subject is
+`CalendarEntry.span` and the `Unsupported("tsrange")` declaration this branch
+added, and its body names #328. The round summary written before the sweep
+recorded 1 in, 1 out; re-deriving the ledger corrected it to **1 in, 2 out**.
+
+**Open count: 104.** `103 (2026-08-25 snapshot) + 2 filed (#328 #329) − 1
+closed (#327) = 104`. Reconciles exactly, measured with
+`gh issue list --state open --limit 200`.
+
+**Triage re-derived 2026-08-27** — **42 numbers**, one `gh issue view` each,
+both rot directions: 18 carried as open work, all `OPEN`; 24 carried as closed,
+all `CLOSED / COMPLETED`. **No rot found** — two consecutive clean rounds since
+the pair of decision-list rots on 08-24.
+
+**Two things left open deliberately, and neither is a loose end.**
+
+**`isCrossFamilySlotConflict` is live code with an unreachable arm.** All four
+`YG001` raisers are gone — the template-level two dropped in
+`20260825065109_schedule_rule_backfill`, the entry-level two in
+`20260826080100_calendar_entry_rewire` — so nothing in the schema raises the
+SQLSTATE the predicate matches. It is **not** unreferenced: two routes import
+and call it and one test file exercises it, and both call sites are labelled
+`DEAD ARM` where they stand. Deleting them changes what
+`api/class-templates/route.ts` and `api/studio-class-templates/route.ts`
+answer for an error nothing can currently produce — a decision worth taking on
+purpose rather than inheriting. Re-derive the census with
+`grep -rn 'YG001' prisma src`.
+
+**The seed step is a gate that should have existed while the code was being
+written.** `20260826080000_calendar_entry`'s own comment rests the placement of
+`CalendarEntry_teacher_slot_excl` on the seed being the first thing that can
+violate a new constraint — while nothing in CI had ever run it. #327 widened
+what "violate" means: under the exact-start key it replaced, a seed collision
+needed two of one teacher's classes at the identical minute; under a RANGE
+constraint any two within a duration of each other collide, and the seed writes
+eleven classes across three teachers. The step landed in `9e94bab3`, the 30th
+of the branch's 32 commits — after the schema it checks. It passed. **It was
+never a gate during development.** Those +22 lines are this branch's entire CI
+change: `test-integration-e2e` and `npx playwright test` already gated at the
+base (`9e7fae0c`) and gated every push on this branch. Re-derive with
+`git diff --shortstat 9e7fae0c a6eaed54 -- .github/workflows/ci.yml`.
 
 ## Round: #297 + #298 — the two class families share a calendar identity (PR #314)
 
