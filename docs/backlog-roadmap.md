@@ -1,27 +1,27 @@
 # Open-issue roadmap & bundling
 
-**Snapshot:** 2026-08-28 (after #272 merged, PR #340) · **106 open issues**,
+**Snapshot:** 2026-08-29 (after #336 merged, PR #345) · **105 open issues**,
 re-counted with `gh issue list --state open --limit 300 --json number --jq
-'length'` = 106.
+'length'` = 105.
 
-**THE 89 → 106 DELTA IS RECONCILED (2026-08-28).**
+**THE 89 → 105 DELTA IS RECONCILED (2026-08-29).**
 
-> **89 − 8 + 25 = 106.** Eight of the 89 closed; twenty-five issues filed since
-> are still open. **Twenty-five in, eight out.**
+> **89 − 8 + 24 = 105.** Eight of the 89 closed; twenty-four issues filed since
+> are still open. **Twenty-four in, eight out.**
 >
 > **Out (8):** #194, #228, #272, #276, #279, #281, #282, #283.
-> **In (25):** #286-#289, #291, #299, #301, #302, #307, #310-#313, #317-#320,
-> #323, #325, #328, #329, #336-#339.
+> **In (24):** #286-#289, #291, #299, #301, #302, #307, #310-#313, #317-#320,
+> #323, #325, #328, #329, #337-#339.
 
 **The debt was worth paying, because the plausible sum was wrong on both
 terms.** This entry previously read "#272 closed on this round (one out), so
 seventeen of the eighteen are issues filed outside it". Neither number
 survives: **eight** closed, not one, and **thirty-seven** were filed, not
 eighteen. The window is far busier than a net of +17 suggests — **37 filed and
-20 closed**, of which twelve (#290, #293, #296, #297, #298, #304, #309, #315,
-#321, #327, #331, #332) were opened *and* closed inside it and net to nothing.
-A net figure hides a 57-issue turnover; that is what §8 means by a count the
-open number cannot reveal on its own.
+21 closed**, of which thirteen (#290, #293, #296, #297, #298, #304, #309, #315,
+#321, #327, #331, #332, #336) were opened *and* closed inside it and net to
+nothing. A net figure hides a 58-issue turnover; that is what §8 means by a
+count the open number cannot reveal on its own.
 
 **The boundary is an issue number, not a timestamp**, which is what makes this
 re-derivable rather than re-argued. The 89 snapshot was taken after #284 was
@@ -30,7 +30,7 @@ filed (12:46:49Z) and after #116/#117/#126 closed (12:53:50Z), so
 follow it. Re-derive with:
 
     gh issue list --state all --limit 400 --json number,state,closedAt \
-      --jq '[.[]|select(.number>=285 and .state=="OPEN")]|length'   # the +25
+      --jq '[.[]|select(.number>=285 and .state=="OPEN")]|length'   # the +24
     gh issue list --state all --limit 400 --json number,state,closedAt \
       --jq '[.[]|select(.number<=284 and .state=="CLOSED"
              and .closedAt>"2026-08-20T12:53:50Z")]|length'          # the -8
@@ -5322,6 +5322,104 @@ empty. **The rot was inside an entry rather than in the list's own bookkeeping:*
 lands", and **#104 is CLOSED**. #219 is correctly open; a reader is simply told
 something is pending that already landed. The open *count* reconciles either way,
 which is why only the per-issue pass reaches it.
+
+## Round: #336 — the pause half joins the shared rule lifecycle (PR #345)
+
+**Closed #336** (rebase-merged 2026-08-29). Both template families'
+`pauseOrResume` now run on one `pauseOrResumeRule` in `rule-lifecycle.ts`,
+parameterised by a `TemplateFamily` descriptor; each service keeps a thin
+wrapper over its own result alias. `update` remains **C2** and stays blocked on
+#284, which this branch does not touch.
+
+**THE TRIGGER #332 FILED PASSED BY RELOCATION, NOT REMOVAL — and that is a
+hazard about proxies, not about this issue.** #336 gated the merge on a `diff`
+over the two pause result-unions' reason sets being empty, chosen because at
+filing time the families' difference lived in the union. It *was* empty when
+measured at `a4913c20`. But it went empty because **#272 moved the room refusal
+somewhere the proxy does not look** — a Postgres CHECK plus a class-route
+pre-check. Had #272 instead put a class-only early return inside the
+transaction, the trigger would read **identically** and the merge would not have
+been safe. What actually licensed it was a full normalised body diff: 140 class
+code lines against 142 studio, every hunk classified. **A proxy criterion can be
+satisfied by moving what it measures, and it reports the same either way.**
+
+**And the criterion is now spent in the strongest sense.** Both result types are
+one-line aliases of the shared `PauseRuleResult`, so both of the command's `sed`
+ranges extract nothing and the diff is empty **because both sides are empty** —
+it would report "pass" for any input whatsoever. The spec's §1 and §8 were
+corrected to say so and the acceptance bullet re-aimed at the shared union. A
+filed trigger can outlive the difference it proxied and go on answering.
+
+**A PER-TASK REVIEW GATE STRUCTURALLY CANNOT SEE A TWIN DEFECT.** Both families'
+pause CAS-miss `unchanged` arms leaked a nested `scheduleRule` onto the PATCH
+response — user-visible, a nested object on a 200. Task 5 declared "one
+observable change", and its claim survived its own diff **only because no studio
+test asserted that arm's shape**. Task 6 then found the identical defect one
+family over, correctly called it a fix, and pinned it. Nobody reconciled the two
+until the whole-branch review. The gate that catches this is the whole-branch
+pass; a stricter per-task one would not have.
+
+**A GUARD THAT READS AS LOAD-BEARING AND IS DECORATIVE — found by breaking it,
+not by reading it.** A comment credited `withSlot`'s `teacher` destructure with
+keeping `teacher` off the wire. Measured serially on a clean tree: dropping only
+that destructure leaves the suite **66/66 green**. What protects the wire is
+that the exported `withSlot` **picks the rule's columns by name rather than
+spreading**, and the runtime pins are first line and last. The reason those pins
+are the only defence is broader than spreads: **in the position an adapter is
+written TypeScript applies no excess-property check at all**, so a hand-written
+`teacher:` compiles too — `tsc --noEmit` stays exit 0 while the leak ships. All
+three copies of that comment now say so.
+
+**A twin-inconsistency fix missed a twin, which is the pattern's third
+occurrence in two rounds.** `92dcda39` corrected "the row lock" from singular to
+plural in `db-locks.ts` and `docs/lock-order.md`, and missed the third copy —
+`childTable`'s own docblock, sitting on the code it describes.
+
+**Two catches said nothing on the path that matters.** Both shared verbs logged
+only on their transient branch, so every rethrown failure reached the operator
+as `unhandled API error … PATCH /api/class-templates/[id]` with no template, no
+teacher and no direction — `?state=` is deliberately excluded from request logs.
+Both now log at `error` before rethrowing, and two `not_found` branches that
+were silent where their archive twins log at `error` were mirrored.
+
+**Six executable claims in `docs/lock-order.md` do not reproduce**, all
+predating this branch and verified against `a4913c20`: the `FOR UPDATE OF`
+census says five and returns 7; `ruleSlotHolder(` says six call sites and
+returns 5; `CROSS_FAMILY_` says six and returns 4; `calendarEntry.delete` says
+three and returns 2; `lock-order.md:87` and `db-locks.ts:267` are claimed paired
+and have diverged; `class-lifecycle.ts:51` says this file and its test and finds
+4 files. The category #332's round named — an executable claim that silently
+begins returning a wrong answer — now has six more instances in one file.
+
+**Ratio: 1 in, 0 out — and the zero is a deferral, not a clean sheet.** Nothing
+was filed. Recorded here for filing: the six claims above; `childTable` and
+`logNoun` are not correlated to `TKind`, so a descriptor can name the wrong
+table for its family and compile — the raw SQL identifier is the one field the
+`kind` correlation does not guard; a suspected flake at
+`class-template-lifecycle.test.ts:730`, in code this branch does not touch,
+which passed 3/3 in isolation; and three pre-existing count defects
+(`lock-order.md`'s "11 lines across four files", `gdpr.ts`'s line-number
+citations into a file that moved ~540 lines, a `generation.ts` census whose `-l`
+form prints one line more than it counts). **#291's premise is falsified and it
+needs closing or amending:** it asks that the studio resume result intersect
+`& SkipCounts` "the way their class twins do", and neither side intersects —
+both nest `counts: SkipCounts`, at all three sites it names, since #296 chose
+the stronger fix. Its acceptance criterion is unreachable as written.
+
+**Open count: 105.** `106 (2026-08-28 snapshot, after PR #340) − 1 closed (#336)
++ 0 filed = 105`. Reconciles exactly, measured with
+`gh issue list --state open --limit 200 --json number -q 'length'`.
+
+**Triage lists re-derived — fourteen numbers, no rot, in either direction.**
+"Live bugs" (#193 #267 #265), "Blocked on a decision" (#213 #214 #219 #226 #266
+#52 → #60) and "Test-seam debt" (#225 #178 #177 #143), one `gh issue view` each;
+"Someone is currently worse off" is still empty and "Blocked on a refactor"
+still none.
+
+**The round's CI went red once, and it was a flake rather than a defect** —
+`studio.spec.ts:360`, class C's third occurrence, on `92dcda39`, a commit whose
+only production-file edits are inside docblocks. It eliminated two candidate
+causes; see the class C section above.
 
 ## Round: #297 + #298 — the two class families share a calendar identity (PR #314)
 
