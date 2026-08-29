@@ -2469,6 +2469,81 @@ prefetch burst is in flight; a person is usually slower. That question decides
 whether the fix belongs in the app or in a shared hydration-aware click helper,
 and it is still open.
 
+**A THIRD OCCURRENCE, 2026-08-28 23:51 UTC, AND IT ELIMINATES TWO CAUSES.** CI
+run `33221784382`, commit `92dcda39` on the #336 branch — a commit whose only
+production-file edits are inside docblocks, so nothing it touched can reach
+client-side routing. `studio.spec.ts:360` again, but on **Mobile Chrome**,
+where occurrence 2 was chromium. The site is therefore not project-specific
+either: one test has now failed under both projects, as the pattern had already
+failed under both tests.
+
+**PR #341's capture did what it was built for**, on the first natural
+occurrence after it shipped: the report carries `browser-logs` reading *"the
+page produced no console output or page errors"*, independently reproducing
+occurrence 2's negative rather than inheriting it.
+
+**The trace can be put on one clock, which is what makes the rest of this
+exact.** Its `context-options` event carries both `wallTime` and
+`monotonicTime`, so the action log (monotonic) and the network log (wall)
+share an axis instead of being estimated against each other. Every figure
+below is measured on that axis, not inferred:
+
+| t | event |
+|---|---|
+| 0.233s | `/api/notifications/stream` 200 — `hydrationSignal`'s own signal |
+| 0.243s, 0.252s | two RSC prefetches of the destination |
+| 0.288s | `performing click action` |
+| 0.294s | the click's own RSC request |
+| 0.296s | `navigations have finished` — soft nav, no document navigation |
+| 0.306s | the route's JS chunk |
+| 0.306s → 30s | nothing |
+
+**HYDRATION IS RULED OUT, and it was the fix anyone would have reached for
+first.** `studio.spec.ts:360` is the one `.click()` → `waitForURL` site in its
+own file that does not arm `hydrationSignal` (`:179` and `:496` both do), and
+`page-helpers.ts` names this exact hazard on `reloadHydrated` — "the same
+lost-click hazard as a click after `goto`". It is the obvious cause and it is
+wrong: the signal had **already resolved 55ms before the click**. Arming it
+would have changed nothing, bought a green run by luck, and buried the cause.
+The router was demonstrably alive before the click, too — it had already issued
+two prefetches for the destination. **`hydrationSignal` gates its own
+component's effect, not a `<Link>` push**, and its docblock should say so.
+
+**THE ABORTED-PREFETCH SHAPE IS CONFIRMED AND SHARPENED — read the trace's
+timings, not its statuses.** A `200` records headers; `receive: -1` records a
+body that never came. `page-helpers.ts` already warns about exactly this
+reading for the SSE stream, and it decides this case:
+
+| request | status | `receive` | body |
+|---|---|---|---|
+| prefetch `_rsc=2w_9mJ…` | 200 | **−1** | **−1** — superseded |
+| prefetch `_rsc=IGyJbx…` | 200 | **−1** | **−1** — superseded |
+| the click's `_rsc=YdLSM6…` | 200 | 5.788ms | 4231 B — **complete** |
+| chunk `0ennd1os1i218.js` | 200 | 1.188ms | 4411 B — **complete** |
+
+So this matches occurrence 1 (one of three completed) rather than occurrence 2
+(all three aborted), and it settles what neither did: **the payload and the
+route's code were both fully in hand when the transition failed to commit**,
+with two dead prefetch entries for the same destination sitting beside them.
+The failure is downstream of every fetch it needed — in the commit, not the
+loading. That is the standing dedup hypothesis's own shape, now with the
+completing request identified.
+
+**AND `router.refresh()` IS RULED OUT AS THE DISTURBER.** `live-updates.tsx:38`
+debounces a `router.refresh()` 500ms off the notification stream's `onmessage`
+— a refresh superseding a pending push is the natural next suspect, and it
+cannot be this. The stream's keepalives are `: keepalive` **comment** frames,
+which never raise `message`; and the dead window contains **zero** network, so
+no refresh ever issued a request. Both eliminations are cheap to re-check and
+expensive to rediscover, which is why they are written here rather than left in
+a run that expires.
+
+**Re-derive** — `ci.yml` uploads `playwright-report` only, and artifacts expire
+7 days after the run, so this trace is gone after 2026-09-04:
+
+    gh run download 33221784382 -n playwright-report -D <dir>
+    unzip -q <dir>/data/*.zip -d <dir>/tr    # 0-trace.trace, 0-trace.network
+
 **Where this leaves C: instrumented, bounded, cause still open.** Brute force
 is now poor value — at ~2% another expected hit costs ~150 full-suite
 executions — and it is no longer the only route, because the console and
@@ -2476,6 +2551,13 @@ executions — and it is no longer the only route, because the console and
 occurrence names itself**. That is the trade being taken: stop paying for
 reproduction, and let the instrumented suite report the next one. The
 preventive sweep below is untouched work and worth more per hour.
+
+**Narrowed by the third occurrence above, without a reproduction being paid
+for.** Hydration and the SSE-driven `router.refresh()` are both eliminated, and
+the failure is now located strictly *after* every fetch the transition needed —
+payload and route chunk both complete — so what is left to test is the router's
+commit in the presence of superseded prefetch entries. The instrument's promise
+held: the next natural occurrence did name itself.
 
 **The second is the one to do first**, for the reason the health-budget half
 of this row demonstrates: a fix aimed at an unmeasured cause changes something
