@@ -8,8 +8,14 @@ description: Build/launch/drive recipe for verifying fair.yoga changes in the ru
 ## Launch
 
 - Postgres runs in Docker as `fairyoga-db-1` on :5432 (`DATABASE_URL` in `.env`).
-- The user often already has `next dev` running on :3000 (check `lsof -nP -iTCP:3000 -sTCP:LISTEN` before starting your own). Hot reload means uncommitted edits are already live there.
-- Otherwise: `EMAIL_DRY_RUN=1 npm run dev` — dry-run logs magic links to stdout instead of Resend (`.env` only has a placeholder Resend key, so real sends fail).
+- **Never kill or restart whatever is already running on :3000, for any reason** — including
+  to add `EMAIL_DRY_RUN` or pick up an env change. Check first:
+  `lsof -nP -iTCP:3000 -sTCP:LISTEN`. If something's there, it's the user's, hot-reloading
+  their uncommitted edits; that instance not having the env var you want is not a reason to
+  touch it. Need dry-run auth and the running one isn't dry-run? Use *Authenticate without
+  email* below instead — it never touches the server at all.
+- Only if :3000 is genuinely empty: `EMAIL_DRY_RUN=1 npm run dev` — dry-run logs magic links
+  to stdout instead of Resend (`.env` only has a placeholder Resend key, so real sends fail).
 
 ## Authenticate without email
 
