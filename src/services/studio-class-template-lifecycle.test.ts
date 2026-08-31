@@ -752,16 +752,11 @@ describe('pauseOrResumeStudioTemplate (DB)', () => {
       });
 
   /**
-   * A `dayOfWeek` set to yesterday's weekday in schema terms (e.g. Sunday on Monday,
-   * Monday on Tuesday), so that the first generated occurrence is guaranteed to
-   * land in week 1 (next week) on every day of the week (Monday through Sunday).
+   * A `dayOfWeek` two days out, so a generated window never contains a class
+   * dated today.
    *
-   * Under week-keyed generation (issue 284), a fixture on `new Date()` (today, week 0)
-   * would hold week 1 if the template's day-of-week fell later in the same calendar week,
-   * causing generated `added` to vary between 3 (on weekdays) and 4 (on weekends).
-   * By choosing yesterday's weekday, the current week has always already elapsed for this
-   * weekday, ensuring the 4 generated occurrences are in weeks 1-4 and strictly disjoint
-   * from today (week 0) across all 7 days of the week.
+   * Two days rather than one so a run that crosses local midnight cannot turn
+   * "tomorrow" into "today" mid-test.
    *
    * This helper is only date-independent because `seedTeacher` pins
    * `defaultTimezone: 'UTC'` (see its comment, which #123 put there). That pin
